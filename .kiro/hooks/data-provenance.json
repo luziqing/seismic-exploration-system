@@ -1,0 +1,26 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Protect data provenance",
+      "description": "This is a public repository: only public or fully synthetic data may be committed; weights, field volumes and copyright application material must stay out.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)(data|doc)/.*",
+      "action": {
+        "type": "agent",
+        "prompt": "A file under data/ or doc/ was just saved. Enforce the data policy for this public hackathon repo: no proprietary/licensed field data, no model weights, no large .npy/.sgy/.pt volumes, and no software-copyright application material from doc/. Confirm the artefact is gitignored, and point to scripts/generate_synthetic_seismic.py as the reproducible way to create demo data. Never present UAV hardware or quantum sensing as implemented."
+      }
+    },
+    {
+      "name": "Check provenance document",
+      "description": "Whenever the data provenance note changes, verify no forbidden binary artefacts are tracked by git.",
+      "trigger": "PostFileSave",
+      "matcher": "docs/DATA_PROVENANCE\\.md$",
+      "action": {
+        "type": "command",
+        "command": "python scripts/preflight.py --check data"
+      },
+      "timeout": 30
+    }
+  ]
+}

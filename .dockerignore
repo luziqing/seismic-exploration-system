@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.py312
+.venv
+venv
+.eggs
+*.egg-info
+.pytest_cache
+.pytest_tmp
+
+# Data (volume-mounted at runtime, never baked into image)
+data/
+
+# Large model files
+*.pt
+*.pth
+
+# Logs
+*.log
+server*.log
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Docker files (not needed inside the image)
+Dockerfile
+docker-compose.yaml
+.dockerignore
+
+# Documentation / dev-only
+docs/
+CLAUDE.md
+README.md
+LICENSE
+start_server.bat
+tests/
+scripts/
+
+# Claude Code workspace
+.aris
+.claude

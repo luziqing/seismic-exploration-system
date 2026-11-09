@@ -1,0 +1,60 @@
+# ── Kiro ─────────────────────────────────────────────────────────────
+# Kiroween hard requirement: /.kiro lives at the repo root and is COMMITTED.
+# There is deliberately NO rule ignoring .kiro/ or .kiro/** — never add one.
+# (scripts/preflight.py --check kiro enforces this.)
+
+# ── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.pytest_tmp/
+.venv/
+.py312/
+venv/
+env/
+dist/
+build/
+
+# ── Generated seismic artefacts (never commit) ───────────────────────
+# Demo volumes are produced by scripts/generate_synthetic_seismic.py.
+data/npy/
+data/sgy/
+data/vds/
+data/zarr/
+data/uploads/
+data/weights/
+data/images/
+data/db/
+*.npy
+*.sgy
+*.segy
+*.vds
+*.vdso
+*.zarr/
+*.pt
+*.pth
+*.pkl
+*.onnx
+
+# ── Third-party / private material ───────────────────────────────────
+# Software-copyright application documents contain third-party entity details.
+doc/
+
+# ── Local agent & editor files ───────────────────────────────────────
+.workbuddy/
+.claude/
+.vscode/
+.idea/
+*.swp
+
+# ── Logs / environment ───────────────────────────────────────────────
+*.log
+server*.log
+.env
+.env.local
+
+# ── OS ───────────────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,27 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Verify synthetic data reproducibility",
+      "description": "After any change to the generator, re-run determinism and schema checks so the demo data stays byte-identical for a fixed seed.",
+      "trigger": "PostFileSave",
+      "matcher": "scripts/generate_synthetic_seismic\\.py$",
+      "action": {
+        "type": "command",
+        "command": "python scripts/generate_synthetic_seismic.py --verify-only"
+      },
+      "timeout": 120
+    },
+    {
+      "name": "Full preflight after generator change",
+      "description": "Run all compliance checks when the synthetic data generator changes.",
+      "trigger": "PostFileSave",
+      "matcher": "scripts/generate_synthetic_seismic\\.py$",
+      "action": {
+        "type": "command",
+        "command": "python scripts/preflight.py --check all"
+      },
+      "timeout": 60
+    }
+  ]
+}

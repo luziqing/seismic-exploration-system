@@ -1,0 +1,27 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Guard .kiro visibility",
+      "description": "Competition hard rule: /.kiro must be committed and must never be ignored by .gitignore.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)\\.gitignore$",
+      "action": {
+        "type": "command",
+        "command": "python scripts/preflight.py --check kiro"
+      },
+      "timeout": 30
+    },
+    {
+      "name": "Block fabricated claims",
+      "description": "Reject 'first SAM for seismic', hardware-as-implemented, and unsourced performance claims whenever docs or steering change.",
+      "trigger": "PostFileSave",
+      "matcher": "(README\\.md|docs/.*\\.md|\\.kiro/steering/.*\\.md)$",
+      "action": {
+        "type": "command",
+        "command": "python scripts/preflight.py --check claims"
+      },
+      "timeout": 30
+    }
+  ]
+}

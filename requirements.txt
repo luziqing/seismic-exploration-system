@@ -1,0 +1,28 @@
+# SamForGeophysics - Dependencies
+# Python >= 3.10 required
+
+# Web framework
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# ML / SAM3
+ultralytics>=8.3.237
+torch>=2.0.0
+numpy>=1.24.0,<2.0.0
+Pillow>=10.0.0
+
+# Seismic data
+segyio>=1.9.0
+matplotlib>=3.7.0
+
+# LLM Chat
+anthropic>=0.30.0
+openai>=1.30.0
+
+# Storage (Zarr v3 required)
+zarr>=3.0.0
+numcodecs>=0.12.0
+
+# OpenVDS (optional, Python 3.10-3.11 only)
+# openvds>=3.4.0  ; python_version < "3.12"

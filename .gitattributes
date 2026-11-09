@@ -1,0 +1,17 @@
+# Force LF line endings for all text files in the repo
+# Prevents CRLF issues when transferring to Linux containers / CI
+* text=auto eol=lf
+
+# Explicitly binary — never mangle
+*.npy    binary
+*.sgy    binary
+*.segy   binary
+*.pt     binary
+*.pth    binary
+*.pkl    binary
+*.onnx   binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
