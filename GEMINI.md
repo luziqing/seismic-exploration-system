@@ -29,7 +29,7 @@
 |---|---|
 | **GitHub** | https://github.com/luziqing/seismic-exploration-system |
 | **分支策略** | `main` = 稳定提交；`kiro` = 比赛提交分支（Kiroween 评委看这个） |
-| **本地路径** | `D:\26tmp\KiroProject\SamForGeophysics-kiro-handoff\SamForGeophysics\` |
+| **本地路径** | `D:\26tmp\KiroProject\SamForGeophysics\`（独立干净的工作区，与 `SamForGeophysics-kiro-handoff` 隔离） |
 | **License** | MIT（`LICENSE` 文件已存在，GitHub About 区须可见） |
 | **Kiro 版本** | IDE 1.4.121 / CLI 3.1.0 / Crew 0.12.0 |
 
@@ -42,7 +42,7 @@
 | 约束 | 状态 |
 |---|---|
 | 新仓库，首次提交在 Oct 30, 2026 09:00 PT 之后 | ✅ 2026-11-08 首次 commit |
-| 公开 GitHub 仓库（非 GitLab/Bitbucket） | ⏳ 需推送到 `github.com/luziqing/seismic-exploration-system` |
+| 公开 GitHub 仓库（非 GitLab/Bitbucket） | ✅ 已推送到 `github.com/luziqing/seismic-exploration-system` |
 | 仓库根目录含 `/.kiro`，且不在 `.gitignore` | ✅ 已验证（preflight 绿） |
 | 开源 License 在仓库 About 区可见 | ⏳ 推送后确认 |
 | 演示视频 < 3 分钟，YouTube 公开 | ❌ 未制作 |
