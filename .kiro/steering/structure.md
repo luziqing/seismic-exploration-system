@@ -28,7 +28,7 @@ SamForGeophysics/
 │   └── DATA_PROVENANCE.md     # where demo data comes from, and its licence
 ├── tests/
 ├── requirements.txt
-├── Dockerfile / docker-compose.yaml / .env.example / .dockerignore
+├── package.json / .env.example
 ├── LICENSE                    # MIT
 └── README.md
 ```

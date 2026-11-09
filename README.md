@@ -31,6 +31,16 @@ Full competition plan: `docs/PROJECT_PLAN.md`. See `.kiro/specs/samforgeophysics
 
 ## Quick start
 
+### Via npm (recommended)
+
+```bash
+npm run data:gen       # generate deterministic synthetic demo volume
+npm test               # run compliance checks & verify data reproducibility
+npm start              # launch server at http://localhost:8000
+```
+
+### Or via direct Python commands
+
 ```bash
 pip install -r requirements.txt
 python scripts/generate_synthetic_seismic.py      # writes data/npy/synthetic_deep_v1/

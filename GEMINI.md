@@ -86,24 +86,24 @@ GET /api/npy/{vol}/slice/timeslice/{k}?mode=raw|lowfreq
 
 ---
 
-## 六、 任务验证标准命令
+## 六、 开发与任务验证命令（npm run 统一工作流）
 
-任何代码或文档变动后，必须在终端执行以下检查确保全绿：
+项目配置了开箱即用的 npm 脚本，封装了开发启动、数据生成、语法检查与合规校验：
 
 ```bash
-# 1. 合规检查（.kiro 可见性、措辞红线、数据排除）
-python scripts/preflight.py --check all
+# 1. 启动本地开发服务 (http://localhost:8000)
+npm start             # 或 npm run dev
 
-# 2. 合成数据生成与字节级一致性验证
-python scripts/generate_synthetic_seismic.py --verify-only
+# 2. 核心测试（自动运行 preflight 检查 + 数据确定性复验）
+npm test
 
-# 3. 前端脚本语法校验
-node --check src/static/js/app.js
-node --check src/static/js/canvas.js
-node --check src/static/js/sam-client.js
-node --check src/static/js/sgy-client.js
-node --check src/static/js/storage.js
+# 3. 一键全局静态检查（前端 JS 语法 + 后端 Python AST 解析 + 合规检查）
+npm run check
 
-# 4. 后端 Python 语法解析校验
-python -c "import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8')) for p in pathlib.Path('src').rglob('*.py')]"
+# 4. 数据生成与确定性复验
+npm run data:gen      # 重新生成合成数据体与真值掩膜
+npm run data:verify   # 仅做字节级确定性比对
+
+# 5. 参赛合规自检
+npm run preflight     # 运行 preflight.py 检查 .kiro/claims/data
 ```

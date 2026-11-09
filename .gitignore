@@ -16,6 +16,13 @@ env/
 dist/
 build/
 
+# ── Node.js ───────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
 # ── Generated seismic artefacts & model weights (never commit) ────────
 # Demo volumes are produced by scripts/generate_synthetic_seismic.py.
 data/npy/
