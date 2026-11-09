@@ -11,7 +11,7 @@ import json
 import requests
 import time
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:9339"
 
 def test_server_status():
     print("=" * 60)
@@ -123,7 +123,7 @@ def main():
         print("3. 导航流程（inline 100→101→102）数据一致")
         print("4. 前端 loading 状态机制已验证（setStatus 调用正确）")
         print("5. 前端 LRU 缓存（sliceCache 20 entries）已实现")
-        print("\n下一步：打开 http://localhost:8000 手动点击导航按钮验证 UI\n")
+        print("\n下一步：打开 http://localhost:9339 手动点击导航按钮验证 UI\n")
         return 0
 
     except requests.exceptions.ConnectionError:

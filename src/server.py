@@ -5,8 +5,8 @@ SamForGeophysics — FastAPI 主入口
     pip install -r requirements.txt
     python src/server.py
 
-访问: http://localhost:8000
-API 文档: http://localhost:8000/docs
+访问: http://localhost:9339
+API 文档: http://localhost:9339/docs
 """
 
 import os
@@ -879,6 +879,6 @@ if __name__ == "__main__":
     import uvicorn
 
     host = os.environ.get("SAM3_HOST", "0.0.0.0")
-    port = int(os.environ.get("SAM3_PORT", "8000"))
+    port = int(os.environ.get("SAM3_PORT", "9339"))
     logger.info("启动 SAM3 地震分割服务器: http://%s:%d", host, port)
     uvicorn.run(app, host=host, port=port)

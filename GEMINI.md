@@ -91,7 +91,7 @@ GET /api/npy/{vol}/slice/timeslice/{k}?mode=raw|lowfreq
 项目配置了开箱即用的 npm 脚本，封装了开发启动、数据生成、语法检查与合规校验：
 
 ```bash
-# 1. 启动本地开发服务 (http://localhost:8000)
+# 1. 启动本地开发服务 (http://localhost:9339)
 npm start             # 或 npm run dev
 
 # 2. 核心测试（自动运行 preflight 检查 + 数据确定性复验）

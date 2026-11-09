@@ -36,7 +36,7 @@ Full competition plan: `docs/PROJECT_PLAN.md`. See `.kiro/specs/samforgeophysics
 ```bash
 npm run data:gen       # generate deterministic synthetic demo volume
 npm test               # run compliance checks & verify data reproducibility
-npm start              # launch server at http://localhost:8000
+npm start              # launch server at http://localhost:9339
 ```
 
 ### Or via direct Python commands
@@ -45,7 +45,7 @@ npm start              # launch server at http://localhost:8000
 pip install -r requirements.txt
 python scripts/generate_synthetic_seismic.py      # writes data/npy/synthetic_deep_v1/
 python scripts/preflight.py --check all
-python src/server.py                              # http://localhost:8000
+python src/server.py                              # http://localhost:9339
 ```
 
 Open the app, pick an inline slice, place positive/negative prompt points, run SAM, then export the mask. Model weights are **not** committed — without them, browsing, conditioning and QC still work and the UI says so explicitly.

@@ -3,15 +3,15 @@
   "version": "1.0.0",
   "description": "Fusing vision foundation model SAM with seismology for low-frequency deep target interpretation - Kiroween 2026 entry",
   "scripts": {
-    "start": "python src/server.py",
-    "dev": "python src/server.py",
+    "start": "node scripts/run.js src/server.py",
+    "dev": "node scripts/run.js src/server.py",
     "test": "npm run preflight && npm run data:verify",
     "check": "npm run check:js && npm run check:py && npm run preflight",
     "check:js": "node --check src/static/js/app.js src/static/js/canvas.js src/static/js/sam-client.js src/static/js/sgy-client.js src/static/js/storage.js src/static/js/llm-client.js",
-    "check:py": "python -c \"import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8')) for p in pathlib.Path('src').rglob('*.py')]\"",
-    "data:gen": "python scripts/generate_synthetic_seismic.py",
-    "data:verify": "python scripts/generate_synthetic_seismic.py --verify-only",
-    "preflight": "python scripts/preflight.py --check all"
+    "check:py": "node scripts/run.js -c \"import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8')) for p in pathlib.Path('src').rglob('*.py')]\"",
+    "data:gen": "node scripts/run.js scripts/generate_synthetic_seismic.py",
+    "data:verify": "node scripts/run.js scripts/generate_synthetic_seismic.py --verify-only",
+    "preflight": "node scripts/run.js scripts/preflight.py --check all"
   },
   "keywords": [
     "kiroween",

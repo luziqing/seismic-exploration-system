@@ -313,12 +313,56 @@ window.addEventListener('beforeunload', () => {
     if (total > 0) saveToLocalStorage();
 });
 
+async function loadVolumeList() {
+    const sel = document.getElementById('volumeSelect');
+    if (!sel) return;
+    try {
+        const resp = await fetch('/api/npy/list');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const volumes = data.volumes || [];
+        sel.innerHTML = '';
+        if (volumes.length === 0) {
+            sel.innerHTML = '<option value="">(无预置数据体)</option>';
+            return;
+        }
+        volumes.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.name;
+            opt.textContent = `${v.name} (${v.n_inlines}×${v.n_crosslines}×${v.n_samples})`;
+            sel.appendChild(opt);
+        });
+
+        sel.onchange = async () => {
+            const selected = sel.value;
+            if (!selected) return;
+            const metaResp = await fetch(`/api/npy/${selected}/meta`);
+            if (metaResp.ok) {
+                const meta = await metaResp.json();
+                await activateVolume(meta, selected, { source: 'api/npy' });
+            }
+        };
+
+        // 默认自动激活第一个数据体 (如 synthetic_deep_v1)
+        const defaultVol = volumes[0].name;
+        sel.value = defaultVol;
+        const metaResp = await fetch(`/api/npy/${defaultVol}/meta`);
+        if (metaResp.ok) {
+            const meta = await metaResp.json();
+            await activateVolume(meta, defaultVol, { source: 'api/npy' });
+        }
+    } catch (err) {
+        console.warn('loadVolumeList failed:', err);
+    }
+}
+
 window.onload = () => {
     canvas.width = canvas.parentElement.clientWidth;
     canvas.height = canvas.parentElement.clientHeight;
     updateModeButtons();
     drawSeismic();
     loadDeviceList();
+    loadVolumeList();
 
     fetch('/api/status')
         .then(r => r.json())
