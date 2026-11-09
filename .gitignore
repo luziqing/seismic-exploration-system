@@ -16,7 +16,7 @@ env/
 dist/
 build/
 
-# ── Generated seismic artefacts (never commit) ───────────────────────
+# ── Generated seismic artefacts & model weights (never commit) ────────
 # Demo volumes are produced by scripts/generate_synthetic_seismic.py.
 data/npy/
 data/sgy/
@@ -26,16 +26,34 @@ data/uploads/
 data/weights/
 data/images/
 data/db/
+data/*
+
+# Seismic data volume formats
 *.npy
 *.sgy
 *.segy
 *.vds
 *.vdso
 *.zarr/
+
+# Model weights & checkpoints (strictly prohibited from git)
 *.pt
 *.pth
-*.pkl
+*.ckpt
+*.safetensors
+*.bin
 *.onnx
+*.pkl
+*.h5
+*.hdf5
+
+# Large archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
 
 # ── Third-party / private material ───────────────────────────────────
 # Software-copyright application documents contain third-party entity details.
