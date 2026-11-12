@@ -44,6 +44,8 @@ Because the rules say judges "may choose to judge based solely on the text descr
 | S10 | Export: GeoJSON + CSV polygons + QC round log (JSON) | P0 | Files open and match the on-screen result | 11-26 |
 | S11 | Kiro evidence (see §5) | P0 | Each write-up topic has a real artefact or an honest "not used" | 11-28 |
 | S12 | Submission: video ≤165 s, English README final with SGSeg disclosure, Devpost text and testing instructions, `kiro` merged into `main`, tag | P0 | `competition.md` checklist all ticked | 12-03 |
+| S13 | Survey map panel in the section view (owner, 11-12): IL × XL plan view, current-slice line, volume-mask footprint (`GET /api/npy/{vol}/mask/{name}/footprint`), click to open an inline / crossline, collapsible. A separate 3-D window stays out of scope | P1 | **Done 11-12**: `tests/test_mask_footprint.py`; browser run (Chrome headless) covered load, inline / crossline / time-slice clicks, footprint after propagation, collapse, volume switch, no JS errors | 11-12 |
+| B1 | **Bug found 11-12 in the browser run:** a SAM click in the UI writes an empty slice to the volume mask (`slice_voxels: 0`, score 0.79; only 33 of 524,288 mask pixels > 0.5), so propagation then fails with "seed slice empty". The same slice prompted through the API gives 1,700 voxels. Suspects: the UI embeds a 1504×752 canvas render whose aspect differs from the slice, and `predict` returns a 1024×512 mask. Blocks S5 / S6 and the demo flow | P0 | Click → SAM → propagate works in the browser; regression test | 11-14 |
 
 ### 3.2 Frozen as is (bug fixes only)
 
@@ -54,7 +56,8 @@ Because the rules say judges "may choose to judge based solely on the text descr
 
 - Hosted or public instance, CPU latency work, authentication, multi-user.
 - Horizon closure error (MVP Requirement 4.1 narrowed; see D2).
-- Propagation extensions (negative or box prompts, write locks, low-freq propagation), mask management UI, 3-D rendering, meshes.
+- Propagation extensions (negative or box prompts, write locks, low-freq propagation).
+- Mask management UI, 3-D rendering or a separate 3-D window, meshes (the in-view survey map, S13, is the agreed substitute).
 - Crossline / timeslice polish beyond what works today.
 - New data sources, real field data, fine-tuning.
 - Bonus-prize work (separate Kiro Crew app repo, blog, social post) before M4 is complete.

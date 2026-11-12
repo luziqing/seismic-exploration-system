@@ -35,7 +35,7 @@ HTTP API (`src/server.py`):
 Volume mask and propagation (spec: `.kiro/specs/volume-propagation/`):
 - `POST /api/npy/{vol}/mask` — write one slice's SAM mask into `data/npy/{vol}/masks/<name>.npy` (bool, same shape as the volume) plus `<name>.json` provenance
 - `POST /api/npy/{vol}/propagate` — grow a seed slice along its normal axis inside a bounded box
-- `GET /api/npy/{vol}/masks`, `GET /api/npy/{vol}/mask/{name}/info`
+- `GET /api/npy/{vol}/masks`, `GET /api/npy/{vol}/mask/{name}/info`, `GET /api/npy/{vol}/mask/{name}/footprint` (survey map: voxels per trace, binary float32 `(nIL, nXL)`)
 - `GET /api/npy/{vol}/mask/{name}/slice/{direction}/{index}` (binary float32 0/1, same orientation as the amplitude slice)
 
 ## Planned additions (see the spec)
