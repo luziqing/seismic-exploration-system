@@ -20,7 +20,7 @@
 |---|---|---|---|
 | H1 | **Low-frequency-first** | Deep information survives mainly in the low band; emphasise it before prompting the model, always keeping the raw view for comparison | Innovation/Idea, Potential Impact |
 | H2 | **A cleaner platform** | "Platform" here means low-noise data conditioning, shown as a paired high-/low-noise variant of the same geological model — not UAV or quantum hardware | Innovation/Idea, Design |
-| H3 | **Self-improving interpretation loop** | After each segmentation round, score fault continuity and horizon closure error, auto-refine prompts for 2–3 rounds, and show the per-round scores live | Technological Implementation, Innovation/Idea, Presentation |
+| H3 | **Self-improving interpretation loop** | After each segmentation round, score label-free QC (deep-target edge leakage and envelope contrast, fault continuity), auto-refine prompts for 2–3 rounds, and show the per-round scores live | Technological Implementation, Innovation/Idea, Presentation |
 
 **Out of scope (hard boundaries)**: no first-of-its-kind claims; no UAV / quantum-sensing hardware claims (background narrative only); no proprietary or field data; no model fine-tuning; no real-survey geological conclusions; no multi-user / production deployment; no un-reproducible performance numbers; QC thresholds are declared heuristics, never presented as validated geophysical accuracy.
 
@@ -41,7 +41,7 @@
 | F7 | Result export (polygons + report) | P0 | Uses the existing export capability | Export opens in the demo |
 | F8 | Degraded path without weights / network / API key | P0 | Browsing, conditioning and QC stay usable; missing parts stated in the UI | No blank page with weights removed |
 | F9 | Product-grade UI and status feedback | P1 | First screen already explains itself; no cosmetic theming | Judge understands without narration |
-| F10 | Publicly reachable running instance | P0 | Judges open it directly; credentials in the private form | Official submission requirement |
+| F10 | Judge access through a **test build** (public repo + testing instructions); no hosted instance | P0 | Rules accept "a website, functioning demo, or a test build"; must stay runnable until 2027-01-29 | Clean clone runs on a second machine by following the README |
 | F11 | Reproducibility & compliance self-checks | P1 | One command, deterministic + `/.kiro` visibility + claim/data guards | All green before submission |
 | F12 | Bonus-prize material (social / blog / Kiro Crew app) | P2 | Only after P0/P1 are done | Off the critical path |
 
@@ -60,7 +60,7 @@
 
 ### 2.3 Constraints (summary)
 
-Data compliance (public/synthetic only, no weights or large volumes in git) · honesty (no fabricated numbers, no first-claims, no hardware claims) · reproducibility (fixed seed → identical output) · availability (usable with no weights/network/key) · competition compliance (`/.kiro` committed and never ignored; license detectable in the GitHub About section; submission material in English) · accessibility (public running URL; <3 min public YouTube video) · time (under four weeks to the deadline; P2 never blocks P0).
+Data compliance (public/synthetic only, no weights or large volumes in git) · honesty (no fabricated numbers, no first-claims, no hardware claims) · reproducibility (fixed seed → identical output) · availability (usable with no weights/network/key) · competition compliance (`/.kiro` committed and never ignored; license detectable in the GitHub About section; submission material in English) · accessibility (test build runnable from the public repo until 2027-01-29; <3 min public YouTube video) · time (under four weeks to the deadline; P2 never blocks P0).
 
 ### 2.4 Error boundaries (summary)
 
@@ -103,7 +103,7 @@ All synthetic, deterministic, ground-truthed, licence-clean. The data **is** the
 | 1:05–1:45 | Prompt interaction → mask overlay → three object classes | A vision foundation model applied to seismic | Technological Implementation |
 | 1:45–2:15 | **QC per-round panel**: round 1 → auto-refined prompt → rounds 2/3 score changes | H3, the brightest moment of the demo | Innovation/Idea / Presentation |
 | 2:15–2:35 | Export + truth comparison + one-click self-check all green | Verifiable, reproducible, usable result | Design / Potential Impact |
-| 2:35–2:45 | Close: positioning, public repo & running link, one line on how Kiro was used | Complete product, deep Kiro usage | Presentation |
+| 2:35–2:45 | Close: positioning, public repo & test-build instructions, one line on how Kiro was used | Complete product, deep Kiro usage | Presentation |
 
 **Key frames** `[target ≥ 6]`: V1 raw section (problem) · V2 raw/low-frequency side-by-side · V3 noise-pair comparison · V4 prompt + mask overlay · V5 per-round QC panel with best-round marker · V6 export + truth + self-check · V7 `/.kiro` structure (specs / steering / hooks).
 
@@ -135,7 +135,7 @@ The official rules also state *"Insufficient use of Kiro will result in disquali
 | Feasibility | Standalone deterministic data generation | `[measured]` byte-identical for fixed seed | self-check output |
 | Presentability | Video length / platform / language | `[target]` ≤165 s, public YouTube, English | video link |
 | Presentability | Key frames | `[target]` ≥6 | §4 list |
-| Presentability | Judge-openable running URL | `[target]` 1 public link | submission form |
+| Presentability | Judge-runnable test build | `[target]` clean clone runs on a second machine | E2 notes |
 | Verifiability | Fixed-seed data consistency | `[measured]` byte-identical | verify-only run |
 | Verifiability | Compliance self-checks | `[measured]` all green | self-check output |
 | Verifiability | Every public number reproducible | `[target]` 100% (no script, no number) | claims register + run logs |
@@ -143,7 +143,7 @@ The official rules also state *"Insufficient use of Kiro will result in disquali
 
 ### 5.2 Acceptance (P0 pass conditions)
 
-1. **Runs**: from the public link, no weights/login needed to complete the primary flow.
+1. **Runs**: from a clean clone of the public repo, following only the README; without weights the app still shows browsing, low-frequency and noise comparisons and says what is missing.
 2. **Shows**: V1–V6 appear in the demo, produced by live interaction.
 3. **Closes the loop**: per-round QC logs with visible early-stop and best-round logic.
 4. **Reproduces**: clone → generate → run matches the video.
@@ -161,8 +161,8 @@ The official rules also state *"Insufficient use of Kiro will result in disquali
 
 | ID | Risk | Impact | Level | Mitigation |
 |---|---|---|---|---|
-| RK1 | Official rule: *"Only new projects are eligible … started before October 30 … are not eligible."* This repository is new (first commit 2026-11-08, no inherited history) and all competition-facing work is inside the submission period, but the volume-browser/SAM pipeline was adapted from an earlier open-source project by the same author | Eligibility | High | Disclosed openly in README (Eligibility note) with a precise list of what was built during the submission period; submission wording kept consistent with that disclosure |
-| RK2 | No publicly reachable running instance yet | Submission | High | Stage-1 exit condition; provide the URL early |
+| RK1 | Official rule: projects must be newly created in the submission period, and entrants "must disclose any other pre-existing code or work incorporated into the Project" (full rules re-read 2026-11-12). This repository is new (first commit 2026-11-08, no inherited history) and all competition-facing work is inside the submission period, but the volume-browser/SAM pipeline was adapted from an earlier open-source project by the same author | Eligibility | Medium | Disclosed openly in README and the Devpost text with a precise list of what was built during the submission period; only that work is described as the project |
+| RK2 | Judges may not run the test build (no hosted instance; SAM3 weights must be obtained separately); the rules allow judging on text, images and video alone | Submission | Medium | Video and README carry the full case; clearly labelled no-SAM mode; tested clean-clone instructions |
 | RK3 | Model weights cannot ship with a public repo | Feasibility | High | F8 degraded path is P0; documented weight acquisition |
 | RK4 | Low-frequency conditioning and the QC loop are still spec-only | Innovation / demo spine | High | Stage-2 P0, ahead of any UI polish |
 | RK5 | Any un-reproducible public number violates the honesty constraint | Credibility | High | No script, no number; claims register + compliance check |
@@ -182,6 +182,6 @@ The official rules also state *"Insufficient use of Kiro will result in disquali
 | Compliance self-checks (`/.kiro` visibility / forbidden claims / data provenance) | `[measured]` all green |
 | Official rules + both prior-work citations verified | `[measured]` 2026-11-08 |
 | Low-frequency conditioning, QC self-improving loop | Spec only — Stage-2 P0 |
-| Public running instance, demo video, English submission material | Not started — Stage-1/3 P0 |
+| Test build instructions, demo video, English submission material | Not started — see `.kiro/steering/scope.md` |
 
 **Stage discipline**: Stage 1 (compliance & runnable base) → Stage 2 (three highlights, verifiable) → Stage 3 (productisation & submission). A stage's exit conditions must be met before the next begins; P2 is considered only after all three.

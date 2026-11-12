@@ -67,6 +67,8 @@ The raw slice is never overwritten; the UI keeps both. All constants live at mod
 
 ## QC metrics
 
+> **Superseded 2026-11-12** (`.kiro/steering/scope.md` D2): the loop is driven by label-free deep-target QC (edge leakage, envelope contrast) plus fault continuity; truth overlap is reported only; horizon closure error is deferred. The new design lives in `.kiro/specs/qc-refine-loop/`. The text below is kept for history.
+
 `qc_service.py` consumes a mask and the truth masks:
 
 - **fault continuity**: fraction of adjacent crossline columns whose detected fault sample index differs by at most `CONTINUITY_TOL_SAMPLES`; penalise gaps.

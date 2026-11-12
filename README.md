@@ -25,7 +25,7 @@ Full competition plan: `docs/PROJECT_PLAN.md`. See `.kiro/specs/samforgeophysics
 
 - **Low-frequency-first**: deep information survives mainly in the low-frequency band; we emphasise it before prompting SAM, while always preserving the raw slice for comparison.
 - **Cleaner platform**: in this software that means low-noise conditioning of the data, not a physical UAV or quantum sensor. UAV / quantum sensing appear only as background narrative and are **not implemented hardware**.
-- **Self-improving interpretation loop**: after each SAM run, score fault continuity and horizon closure error, then automatically refine prompts for 2–3 rounds and show the round-by-round log.
+- **Self-improving interpretation loop**: after each SAM run, score label-free QC metrics (deep-target edge leakage and envelope contrast, fault continuity), then automatically refine prompts for 2–3 rounds and show the round-by-round log.
 
 **We do not claim to be the first to apply SAM to seismic data.** Prior work is verified and cited: *Seismic Fault SAM* ([arXiv:2407.14121](https://arxiv.org/abs/2407.14121), Chen et al., 2024) — which itself claims the first application of SAM to seismic fault interpretation — and *Domain-Guided Prompting of SAM for Seismic Interpretation* ([arXiv:2606.15786](https://arxiv.org/abs/2606.15786), Ahmad et al., 2026), a zero-shot attribute/colormap + hybrid-prompting framework. See `.kiro/steering/sources.md` and `docs/COMPETITION_RULES.md`.
 

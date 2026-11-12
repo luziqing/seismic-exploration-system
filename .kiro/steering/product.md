@@ -17,7 +17,7 @@ Ship a **demonstrable product**, not a proof of concept. A user loads a seismic 
 ## Differentiator — state it precisely
 
 - Low-frequency content carries deep information; a cleaner (low-noise) platform reduces the noise floor. Together they make previously unhearable deep targets interpretable.
-- A **self-improving interpretation loop**: score QC metrics (fault continuity, horizon closure error) after each SAM run and automatically refine prompts for 2–3 rounds.
+- A **self-improving interpretation loop**: score label-free QC metrics (deep-target edge leakage and envelope contrast, fault continuity) after each SAM run and automatically refine prompts for up to 3 rounds. Ground-truth overlap is shown for reference only and never drives the loop.
 
 ### Do NOT claim
 

@@ -17,7 +17,7 @@
 - [x] `src/lowfreq_service.py` — spectral weighting on a 2-D slice, raw volume preserved (done 2026-11-09)
 - [ ] Wire low-frequency mode into `src/server.py` slice endpoints
 - [ ] Add low-frequency toggle / comparison in `src/static/js/`
-- [ ] `src/qc_service.py` — fault continuity, horizon closure error, reuse of `validation_service.py`
+- [ ] `src/qc_service.py` — label-free deep-target QC (edge leakage, envelope contrast) + fault continuity; ground-truth overlap via `validation_service.py` reported only (scope D2; details in `.kiro/specs/qc-refine-loop/`)
 - [ ] Focused tests for shape preservation and QC behaviour on constructed masks
 
 ## Wave 3 — Self-improving loop (depends on Wave 2)
@@ -28,7 +28,7 @@
 
 ## Wave 4 — Product polish (depends on Wave 3)
 
-- [ ] Demo-friendly default state: synthetic volume loaded on first open
+- [x] Demo-friendly default state: synthetic volume loaded on first open (done 2026-11-09, `f0ad826`)
 - [ ] Graceful no-weight / no-API-key path with visible status
 - [ ] Visual pass on canvas, toolbar and QC panel (Design, 20%)
 - [ ] Export flow end-to-end check (GeoJSON + CSV)

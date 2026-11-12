@@ -43,7 +43,7 @@ Build a demonstrable product that fuses SAM (a vision foundation model) with sei
 
 #### Acceptance Criteria
 
-1. WHEN a segmentation round completes THEN the system SHALL compute at least fault continuity and horizon closure error, plus an overlap metric from `validation_service.py`, and log all of them.
+1. WHEN a segmentation round completes THEN the system SHALL compute label-free QC metrics for the deep target (edge leakage, envelope contrast) and fault continuity, log them, and report the ground-truth overlap from `validation_service.py` alongside without using it to drive the loop. (Narrowed 2026-11-12 from "fault continuity and horizon closure error"; see `.kiro/steering/scope.md` D2. Horizon closure error is deferred.)
 2. WHEN a round scores below a declared threshold THEN the system SHALL derive a corrective point or box prompt at the worst-scoring location and run another round, up to a maximum of 3 rounds.
 3. WHEN scores stop improving THEN the loop SHALL stop early and retain the best round.
 4. THE UI SHALL display the round-by-round score log so the improvement is visible in the demo video.

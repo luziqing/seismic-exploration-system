@@ -54,8 +54,8 @@
 | 功能 | 位置 | 状态 |
 |---|---|---|
 | 低频条件化：沿时间轴 RFFT × 余弦锥形权重（≤14 Hz 全通，≥30 Hz 衰减到 0.05）× IRFFT | `src/lowfreq_service.py`、`tests/test_lowfreq.py` | **未提交**；`tasks.md` 已勾选；**尚未接入任何端点或 UI** |
-| 体 mask：把 SAM 的 2D mask 回映射到体网格，存 `data/npy/<vol>/masks/` | `src/volume_mask_service.py`、`tests/test_volume_mask.py` | **未提交**，spec 中无对应条目 |
-| 跨切片传播：用上一张 mask 自动生成点提示，逐张推理，IoU 防漂移 | `src/propagation_service.py`、`tests/test_propagation.py` | **未提交**，spec 中无对应条目；新增 `scipy` 依赖 |
+| 体 mask：把 SAM 的 2D mask 回映射到体网格，存 `data/npy/<vol>/masks/` | `src/volume_mask_service.py`、`tests/test_volume_mask.py` | 已提交（`5d7499f`）；spec 见 `.kiro/specs/volume-propagation/` |
+| 跨切片传播：用上一张 mask 自动生成点提示，逐张推理，IoU 防漂移 | `src/propagation_service.py`、`tests/test_propagation.py` | 已提交（`5d7499f`）；spec 同上；新增 `scipy` 依赖 |
 | 体 mask / 传播 API：`POST /api/npy/{vol}/mask`、`POST .../propagate`、`GET .../masks`、`GET .../mask/{name}/info`、`GET .../mask/{name}/slice/{dir}/{i}` | `src/server.py` | **未提交** |
 | 前端"🔁 传播"按钮 + 范围设置面板；SAM 结果自动写入体 mask | `index.html`、`sam-client.js` | **未提交** |
 | `?mode=lowfreq` 切片参数 | `src/server.py` | **缺失** |
@@ -94,8 +94,8 @@
 ## 3. 已发现的不一致（接手时先处理）
 
 1. **文档滞后**：`README.md` 的 Honest status 仍写低频"not yet implemented"；`HANDOFF.md` 写"Wave 2 not started"、"3 specs"，实际只有 1 个 spec；`GEMINI.md` 未提到体 mask / 传播。
-2. **范围漂移**：体 mask + 跨切片传播是计划外功能，没有 requirement / design / task。它对 Potential Impact 有帮助（从切片走向三维解释），但必须补 spec，否则既违反"spec 驱动"约定，也浪费了它作为 Kiro 使用证据的价值。
-3. **依赖与约定**：`scipy` 已进 `requirements.txt`，但 `tech.md` 未登记。`propagation_service.py` / `volume_mask_service.py` 的注释和报错为中文，`structure.md` 的代码地图也未收录它们。
+2. ~~范围漂移~~ **已处理（A2）**：体 mask + 跨切片传播已补 spec `.kiro/specs/volume-propagation/`（事后补写，未完成项列在其 `tasks.md`）。
+3. **依赖与约定**：`scipy`、新端点和新模块已登记到 `tech.md` / `structure.md`。`propagation_service.py` / `volume_mask_service.py` 的注释和报错仍为中文（已列入 volume-propagation 的 Wave 5）。
 4. **`tasks.md` 勾选的低频任务只完成了服务层**，端点和 UI 两项仍未勾选，这一点是对的。验证前不要再勾选。
 5. **未提交改动已部分验证**（§2.4）：静态检查、79 个测试、切片接口、SAM → 体 mask 链路都通过；**传播链路实测失败**。单元测试没有发现这个问题，说明 `test_propagation.py` 没有覆盖真实 SAM 输出的坐标映射。`.venv` 已具备完整后端依赖，`HANDOFF.md` 里的环境说明已过时。
 6. **preflight 的禁用表述扫描不覆盖 `CLAUDE.md` / `GEMINI.md`**（只扫 README、AGENTS、HANDOFF、docs、steering、specs）。两个文件都在公开仓库里，应加入扫描目标。
@@ -116,77 +116,20 @@
 
 ---
 
-## 5. 开发规划（2026-11-09 → 2026-12-04 14:00 PST）
+## 5. 开发规划与边界
 
-剩余约 25 天。原则：**先补齐 H1/H2/H3 的可见闭环，再做打磨，最后留足视频与提交时间**。评分五项各 20%，Design + Presentation 合计 40%，Technological Implementation 主要看 Kiro 用得多深多广。
+**以 `.kiro/steering/scope.md` 为准**（2026-11-12 依据官方规则 PDF 全文制定，常驻注入）。要点：
 
-### 阶段 A（11-09 → 11-15）：收口 Wave 2，让 H1 / H2 可见
-
-| # | 任务 | 验收 |
-|---|---|---|
-| A1 | 审查并分批提交未提交改动：lowfreq / 体 mask 各一个 commit；传播先修复 §2.4 的空 mask 问题并补一个用真实 SAM 输出的回归测试，再提交 | `npm run check`、`pytest tests`、preflight 全绿；传播能在种子 ±2 内写入非空切片 |
-| A1b | 排查 SAM predict 约 3 s 的延迟（是否每次重跑 encoder） | predict 降到亚秒级，或写明原因 |
-| A2 | 为体 mask + 传播补 spec：新建 `.kiro/specs/volume-propagation/`（requirements / design / tasks） | spec 与现有代码一致；`structure.md`、`tech.md` 同步 |
-| A3 | `server.py` 三个切片端点支持 `?mode=raw\|lowfreq`，复用 `_npy_binary_response`，SAM 嵌入也可选用低频图 | 返回 shape 与 raw 一致；原始体不变 |
-| A4 | 前端 Raw / Low-freq 切换 + 并排对照；高噪 / 低噪一键对照（同一切片位置） | 演示分镜 V2、V3 可直接录 |
-| A5 | `scripts/measure_lowfreq.py`：在合成体上测深部目标区与背景的对比度（raw vs lowfreq，高噪 vs 低噪），固定种子 | 输出数字可复现，作为 README/视频中唯一的 H1/H2 数字来源 |
-
-### 阶段 B（11-16 → 11-22）：Wave 3，H3 自改进循环（演示高光）
-
-| # | 任务 | 验收 |
-|---|---|---|
-| B1 | `src/qc_service.py`：断层连续性、层位闭合差、复用 `validation_service` 的重叠指标；常量置顶声明 | 在人工构造 mask 上行为单调、可测 |
-| B2 | 提示改进驱动：定位最差区域 → 欠覆盖加正点 / 过覆盖加负点 → 最多 3 轮 → 不提升即停 → 保留最佳轮 | 单测覆盖提前停止与最佳轮保留 |
-| B3 | `POST /api/npy/{vol}/refine` 返回 `{round, prompts, metrics, delta}` 日志并持久化 | 日志可在 SQLite 中回放 |
-| B4 | 前端逐轮 QC 面板：轮次得分、纠正提示点位、最佳轮标记 | 分镜 V5 可直接录 |
-| B5 | **决策点（需人确认）**：无权重时循环用什么分割器。建议加一个明确标注为"fallback, not SAM"的确定性分割器（如包络阈值 + 区域生长），让公网实例在无 GPU / 无权重时也能跑完整循环 | 见 §6 D2 |
-
-### 阶段 C（11-23 → 11-29）：产品化、部署、Kiro 深度
-
-| # | 任务 | 对应评分 |
-|---|---|---|
-| C1 | UI 全面英文化（按钮、状态、提示、报错）；首屏即有已加载剖面、明显的提示入口、状态指示 | Design、提交合规（材料须英文） |
-| C2 | 降级路径：缺权重 / 缺 key 时状态栏明确提示，主流程不白屏 | Design（F8） |
-| C3 | 端到端导出检查（GeoJSON + CSV + QC 报告） | Design（F7） |
-| C4 | **公网实例**：选定托管方案并上线，评委可直接打开；上线前去掉 `/api/npy/list` 中的绝对路径，关闭上传等不需要的写接口 | 提交硬性要求（F10） |
-| C5 | Kiro 使用深化（见下表），并保留证据（截图、hook 日志、commit 信息） | Technological Implementation |
-| C6 | 一键自检入口（页面上或 `npm test`），评委可见全绿 | Design、可信度 |
-
-**Kiro 使用深化清单**（目前只有 1 spec / 6 steering / 3 个 `PostFileSave` hook，不足以体现"多样性与实验"）：
-
-- **Specs**：每个特性一个 spec（`lowfreq-conditioning`、`qc-refine-loop`、`volume-propagation`、`public-deployment`），每个 spec 的 tasks 由 Kiro 执行并勾选。
-- **Hooks**：新增不同触发器，例如 `PostFileSave` 于 `src/*.py` 时跑对应测试；`Stop` 时跑 `preflight --check all`；`PreToolUse` 拦截 `git add data/`；`PostFileSave` 于 `src/static/js/*.js` 时跑 `npm run check:js`。
-- **Custom agents**（`.kiro/agents/`）：如 `claims-auditor`（审查对外文案是否有未复现数字）、`qc-reviewer`（审查 QC 阈值是否被调参作弊）。
-- **Steering**：给 `seismic-domain.md` 之外的领域知识按 `fileMatch` 条件加载，例如 QC 指标定义只在改 `qc_service.py` 时注入。
-- **CLI / Crew**：用 Kiro CLI 跑无头的 spec 任务与校验；用 Kiro Crew 做并行 worker（例如 UI 英文化与 QC 服务并行）。写进 README 时如实说明各自做了什么、和 IDE 有何不同。
-- **MCP / Powers**：仅在真有用时引入（例如用 Pencil 做 UI 设计稿再落地），不为凑数。
-
-### 阶段 D（11-30 → 12-04）：视频与提交
-
-| 日期 | 任务 |
-|---|---|
-| 11-30 → 12-01 | 按 `docs/PROJECT_PLAN.md` §4 分镜录制 ≤165 s 英文视频（实操录屏，不拼静态图），上传 YouTube 公开 |
-| 12-01 | README 英文定稿：Honest status 与代码一致；"How Kiro was used"回答官方三问（IDE/CLI/Web/Crew 区别、自定义 agent、hook 自动化了什么）；所有数字指向脚本 |
-| 12-02 | **代码冻结**。按 `competition.md` 清单逐项勾选；GitHub About 显示 MIT；公网实例回归测试 |
-| 12-03 | 提交 Devpost（预留 1 天缓冲；截止为 12-04 14:00 PST = 12-05 06:00 北京） |
-| 12-04 | 仅修提交表单问题；可选 Social Blitz（`#KiroweenHackathon26`）/ Bonus Blog |
-
-**取舍规则**：任一评分维度看起来低于 7/10，先补该维度，再加功能。P2（奖励奖项素材、Best Kiro Crew App）只在阶段 C 全部完成后考虑。
-
----
+- 交付方式：**test build**（公开仓库 + 测试说明），不做公网实例；规则允许"a website, functioning demo, or a test build"。项目须可运行到评审结束 **2027-01-29**。
+- 范围：S1–S12 功能项 + E1–E7 稳定性 / 可执行性项；体 mask 与传播冻结；其余见 scope §3.3"不做"清单。
+- 里程碑（北京时间）：M1 H1/H2 11-16 → M2 H3 11-23 → M3 产品化 + test build 11-29 → **11-30 功能冻结** → M4 12-03 提交，12-04 只作缓冲。
+- Kiro 使用说明要回答规则列出的 8 个问题（IDE/CLI/Web/Crew、自定义 agent、hooks、spec 驱动、steering、MCP、PBT、powers），只写真实做过的事。
 
 ## 6. 需要人来决定的事项
 
-| ID | 事项 | 建议 |
-|---|---|---|
-| D1 | **参赛资格**：解释平台改编自 2026 年 6 月开始的 SGSeg。官方规则要求项目在 10-30 之后开始 | 维持 README 中的公开披露，并在 Devpost Q&A 向主办方确认；不要悄悄淡化 |
-| D2 | 无权重时自改进循环的分割器 | 加一个标注清楚的确定性 fallback 分割器，保证公网实例可演示 H3 |
-| D3 | 公网托管方案与模型选择。`sam3.pt` 的许可与是否可自动下载需核实；若不能在公网实例中合法、自动获取权重，考虑可自动下载的较小 SAM 变体，或仅在 fallback 模式下公开运行 | 阶段 C 开始前定案 |
-| D4 | 体 mask / 跨切片传播是否进入 3 分钟演示 | 只在 H1/H2/H3 都录得出来之后，作为 10 秒以内的"三维延伸"镜头 |
-| D5 | `CLAUDE.md` / `GEMINI.md` 是否保留为中文 | 提交材料须为英文；建议提交前译为英文或在 README 说明它们是内部 agent 指南 |
+见 `scope.md` §8（决策）与 §9（只能由所有者完成的事项：确认 SGSeg 归属、申请 Kiro credits、仓库公开、SAM3 权重获取渠道、第二台机器、YouTube 与 Devpost）。
 
 ---
-
 ## 7. 接口与数据契约（不可改动）
 
 - 数据体：`data/npy/<name>/amplitude.npy`，`float32`，C-order，`[nIL, nXL, nSamples]`；元数据 `meta.json`；真值 `truth/{fault,horizon,deep_target}_mask.npy`（bool，同 shape）。
