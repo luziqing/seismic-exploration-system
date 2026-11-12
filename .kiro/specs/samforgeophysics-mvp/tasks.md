@@ -22,6 +22,8 @@
 
 ## Wave 3 — Self-improving loop (depends on Wave 2)
 
+> Detailed requirements, design and tasks: `.kiro/specs/qc-refine-loop/` (written before the code, 2026-11-12). Tick the items below when that spec's waves land.
+
 - [ ] Prompt-refinement driver: worst-region localisation, corrective point/box, max 3 rounds, early stop
 - [ ] Persist round log and expose it via an API endpoint
 - [ ] Render round-by-round QC panel in the UI
