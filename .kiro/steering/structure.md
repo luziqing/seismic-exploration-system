@@ -23,7 +23,7 @@ SamForGeophysics/
 │   ├── validation_service.py  # IoU / Dice / Precision / Recall
 │   ├── database.py            # SQLite schema and persistence
 │   ├── llm_service.py         # optional interpretation assist
-│   └── static/{css,js}/       # Canvas UI, SAM client, survey map, storage, LLM chat
+│   └── static/{css,js}/       # Canvas UI, SAM client, survey map, raw/low-freq + noisy/clean compare, storage, LLM chat
 ├── scripts/
 │   ├── generate_synthetic_seismic.py   # deterministic public-domain demo data
 │   ├── preflight.py                    # hooks-backed compliance checks
