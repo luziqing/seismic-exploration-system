@@ -28,9 +28,12 @@ SamForGeophysics/
 │   ├── generate_synthetic_seismic.py   # deterministic public-domain demo data
 │   ├── preflight.py                    # hooks-backed compliance checks
 │   ├── run.js                          # npm script runner (picks .venv python)
+│   ├── check_js.js                     # node --check on every frontend script
+│   ├── measure_lowfreq.py              # H1/H2 numbers (deep-target visibility); results in docs/MEASUREMENTS.md
 │   └── test_sam_inference.py, test_propagation_e2e.py   # GPU end-to-end checks; need a running server and weights
 ├── docs/
-│   └── DATA_PROVENANCE.md     # where demo data comes from, and its licence
+│   ├── DATA_PROVENANCE.md     # where demo data comes from, and its licence
+│   └── MEASUREMENTS.md        # every published number, its script and its limits
 ├── tests/
 ├── requirements.txt
 ├── package.json / .env.example
