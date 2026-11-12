@@ -50,6 +50,7 @@ import zarr_service
 import lowfreq_service
 import volume_mask_service
 import propagation_service
+import refine_service
 import validation_service
 import vds_service
 import database
@@ -693,6 +694,100 @@ async def npy_read_mask_slice(vol_name: str, mask_name: str, direction: str, ind
     except (IndexError, ValueError) as e:
         raise HTTPException(400, str(e))
 
+
+# ══════════════════════════════════════════════════════════════
+# QC-driven refine loop (spec qc-refine-loop, Requirement 4)
+# ══════════════════════════════════════════════════════════════
+
+class RefineRequest(BaseModel):
+    direction: str
+    index: int
+    mode: str = "raw"                    # view SAM segments; QC always uses the raw slice
+    target_type: str = "deep_target"     # deep_target | fault
+    points: list[list[float]]            # [[nx, ny], ...] normalised to the slice, in [0, 1]
+    labels: list[int]                    # 1 include, 0 exclude
+    max_rounds: int = refine_service.MAX_ROUNDS
+    write_mask: bool = True
+
+
+def _refine_response(run: dict) -> dict:
+    """JSON-safe copy of a run: masks as 0/1 nested lists."""
+    out = {k: v for k, v in run.items() if k != "rounds"}
+    out["rounds"] = [{**{k: v for k, v in r.items() if k != "mask"},
+                      "mask": np.asarray(r["mask"], dtype=np.uint8).tolist()} for r in run["rounds"]]
+    return out
+
+
+@app.post("/api/npy/{vol_name}/refine")
+def npy_refine(vol_name: str, req: RefineRequest):
+    """Run the QC-driven prompt loop on one slice and store the round log (sync: runs in the thread pool)."""
+    npy_dir = _npy_vol_dir(vol_name)
+    if req.index < 0:
+        raise HTTPException(400, f"Index must not be negative: {req.index}")
+    if not req.points or len(req.points) != len(req.labels):
+        raise HTTPException(400, "points and labels must be non-empty and of equal length")
+    if any(len(p) != 2 or not (0.0 <= p[0] <= 1.0 and 0.0 <= p[1] <= 1.0) for p in req.points):
+        raise HTTPException(400, "points must be [nx, ny] pairs normalised to [0, 1]")
+    if any(lb not in (0, 1) for lb in req.labels):
+        raise HTTPException(400, "labels must be 0 (exclude) or 1 (include)")
+    try:
+        raw = _npy_slice_array(npy_dir, req.direction, req.index, "raw")
+        view = raw if req.mode == "raw" else _npy_slice_array(npy_dir, req.direction, req.index, req.mode)
+    except (IndexError, ValueError) as e:
+        raise HTTPException(400, str(e))
+    rows, cols = raw.shape
+    user_points = [{"row": min(rows - 1.0, max(0.0, ny * rows - 0.5)), "col": min(cols - 1.0, max(0.0, nx * cols - 0.5)),
+                    "label": int(lb), "nx": nx, "ny": ny} for (nx, ny), lb in zip(req.points, req.labels)]
+
+    img, sy, sx = propagation_service.render_slice_image(view)
+    save_path = UPLOAD_DIR / f"{uuid.uuid4().hex}.png"
+    img.save(save_path, "PNG")
+    try:
+        emb_id = sam_service.embed_image(str(save_path))["embedding_id"]     # once for all rounds
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+    def segment(points_rc, labels):
+        pts = [[(c + 0.5) * sx, (r + 0.5) * sy] for r, c in points_rc]
+        out = sam_service.predict_mask_np(emb_id, pts, list(labels))
+        return volume_mask_service.resample_mask_to_grid(out["mask"], (rows, cols))
+
+    try:
+        result = refine_service.run(raw, user_points, segment, target_type=req.target_type,
+                                    direction=req.direction, max_rounds=req.max_rounds)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    finally:
+        sam_service.drop_embedding(emb_id)
+
+    truth_path = npy_dir / "truth" / f"{req.target_type}_mask.npy"
+    truth = None
+    if truth_path.exists():
+        tv = np.load(str(truth_path), mmap_mode="r")
+        truth = np.array(volume_mask_service._slice_view(tv, req.direction, req.index), dtype=bool)
+    refine_service.attach_truth(result, truth)
+
+    run_id = database.insert_refine_run(vol_name, req.direction, req.index, req.mode, req.target_type,
+                                        (rows, cols), result)
+    best = result["rounds"][result["best_round"] - 1]
+    if req.write_mask and best["mask"].any():
+        volume_mask_service.write_slice_mask(
+            str(npy_dir), "sam_mask", req.direction, req.index, best["mask"].astype(np.float32),
+            mode="replace", score=best["score"],
+            points=[{**p, "source": f"refine_run_{run_id}_round_{best['round']}:{p['source']}"} for p in best["prompts"]])
+    return _refine_response({"run_id": run_id, "volume": vol_name, "direction": req.direction, "index": req.index,
+                             "mode": req.mode, "target_type": req.target_type, "grid_shape": [rows, cols],
+                             **result})
+
+
+@app.get("/api/refine/{run_id}")
+def get_refine(run_id: int):
+    run = database.get_refine_run(run_id)
+    if run is None:
+        raise HTTPException(404, f"Refine run not found: {run_id}")
+    return _refine_response(run)
 
 # ══════════════════════════════════════════════════════════════
 # VDS API — OpenVDS 卷数据 (本地 .vds 或 S3/Azure URL)

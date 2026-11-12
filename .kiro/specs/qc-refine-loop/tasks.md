@@ -67,10 +67,19 @@ Spec first (Requirement 1.7, 1.8, 3.8; design "Envelope", "Reliability gate"). `
 
 ## Wave 3 — API and persistence (S5; Requirement 4) — due 11-21
 
-- [ ] SQLite tables `refine_runs`, `refine_rounds` (RLE masks) in `src/database.py`, with insert and read-back
-- [ ] `POST /api/npy/{vol}/refine` and `GET /api/refine/{run_id}`; normalised points → render pixels; best mask written to `sam_mask` with the round in its provenance; 400 / 404 / 503
-- [ ] `tests/test_refine_api.py` with SAM stubbed: validation, coordinate mapping, `GET` equals `POST`, 503 without weights, `sam_mask` written
-- [ ] Register the endpoints in `.kiro/steering/tech.md` and the modules in `structure.md`
+- [x] (2026-11-12) SQLite tables `refine_runs`, `refine_rounds` (RLE masks) in `src/database.py`, with insert and read-back
+- [x] (2026-11-12) `POST /api/npy/{vol}/refine` and `GET /api/refine/{run_id}`; normalised points → render pixels; best mask written to `sam_mask` with the round in its provenance; 400 / 404 / 503
+- [x] (2026-11-12, 18 tests) `tests/test_refine_api.py` with SAM stubbed: validation, coordinate mapping, `GET` equals `POST`, 503 without weights, `sam_mask` written
+- [x] (2026-11-12) Register the endpoints in `.kiro/steering/tech.md` and the modules in `structure.md`
+
+### Diagnostic real-SAM runs, 2026-11-12 (not the Wave 5 measurement; not for README or video)
+
+In-process, click = interior point of the truth slice, inlines 16 / 20 / 24, `write_mask: false`:
+
+- **Clean volume:** round 1 is already good (truth IoU 0.87–0.94). In 4 of 6 runs the correction made SAM worse (e.g. IoU 0.91 → 0.33) and the QC score dropped too, so the loop stopped with `no_gain` and kept round 1. In 2 of 6 a correction raised the QC score by ≥ 0.01 and became best: IoU 0.89 → 0.88 (il 16) and 0.90 → 0.93 (il 24). The best-round rule never kept a worse-QC round.
+- **Noisy volume:** the gate stopped every run after round 1 (`qc_unreliable`), as intended.
+- **Side finding for H1:** on the noisy volume, SAM with this single click reached truth IoU 0.61–0.69 on the raw view but only 0.07–0.08 on the low-frequency view. So the low-frequency view does not help SAM here, although it separates the target by energy (`docs/MEASUREMENTS.md`). Wave 5 must measure this properly before anything is said about it.
+- Latency: ~0.5 s per run after the model is loaded.
 
 ## Wave 4 — UI panel (S6; Requirement 5) — due 11-22
 

@@ -18,6 +18,8 @@ SamForGeophysics/
 │   ├── lowfreq_service.py     # low-frequency spectral weighting of a 2-D slice (not yet routed)
 │   ├── volume_mask_service.py # 2-D SAM mask -> 3-D voxel mask under data/npy/<vol>/masks/
 │   ├── propagation_service.py # cross-slice SAM propagation inside a bounded box
+│   ├── qc_service.py          # label-free QC of a mask (clicked-envelope reference, raw view, reliability gate)
+│   ├── refine_service.py      # QC-driven prompt loop (max 3 rounds, best round kept)
 │   ├── sgy_service.py         # SEG-Y upload / conversion
 │   ├── sgy|npy|zarr|vds_*     # alternate volume backends
 │   ├── validation_service.py  # IoU / Dice / Precision / Recall

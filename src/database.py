@@ -109,6 +109,27 @@ def init_db():
             metadata_json TEXT DEFAULT '',
             created_at  REAL    DEFAULT (strftime('%s','now'))
         );
+
+        -- QC-driven refine loop (spec qc-refine-loop, Requirement 4)
+        CREATE TABLE IF NOT EXISTS refine_runs (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            volume       TEXT, direction TEXT, slice_index INTEGER, mode TEXT, target_type TEXT,
+            grid_shape   TEXT,             -- JSON [rows, cols]
+            best_round   INTEGER, stop_reason TEXT, stop_message TEXT,
+            constants    TEXT,             -- JSON
+            created_at   REAL DEFAULT (strftime('%s','now'))
+        );
+        CREATE TABLE IF NOT EXISTS refine_rounds (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id       INTEGER REFERENCES refine_runs(id),
+            round        INTEGER,
+            prompts      TEXT,             -- JSON
+            metrics      TEXT,             -- JSON
+            score        REAL, delta REAL,
+            correction   TEXT,             -- JSON or NULL
+            truth_reference TEXT,          -- JSON or NULL (reporting only)
+            mask_rle     TEXT              -- JSON run-length encoding of the native-grid mask
+        );
     """)
     # ── 迁移: 移除 pick_sessions.slice_id 的 FK 约束 (旧表有 REFERENCES slices(id))
     try:
@@ -405,3 +426,77 @@ def list_validation_runs(session_id: int) -> list[dict]:
     ).fetchall()
     conn.close()
     return [_decode_validation_run(row) for row in rows]
+
+
+# ── Refine loop runs (spec qc-refine-loop, Requirement 4) ─────────────────────
+
+def mask_to_rle(mask) -> list[int]:
+    """Row-major run lengths, starting with a run of zeros (possibly empty)."""
+    import numpy as np
+    flat = np.asarray(mask, dtype=bool).ravel()
+    if flat.size == 0:
+        return []
+    change = np.flatnonzero(np.diff(flat.astype(np.int8))) + 1
+    bounds = np.concatenate([[0], change, [flat.size]])
+    runs = np.diff(bounds).tolist()
+    return ([0] + runs) if flat[0] else runs
+
+
+def rle_to_mask(runs: list[int], shape):
+    import numpy as np
+    flat = np.zeros(int(np.prod(shape)), dtype=bool)
+    pos, val = 0, False
+    for n in runs:
+        if val:
+            flat[pos:pos + n] = True
+        pos += n
+        val = not val
+    if pos != flat.size:
+        raise ValueError(f"RLE covers {pos} pixels, expected {flat.size}")
+    return flat.reshape(shape)
+
+
+def insert_refine_run(volume: str, direction: str, slice_index: int, mode: str, target_type: str,
+                      grid_shape, result: dict) -> int:
+    conn = get_conn()
+    cur = conn.execute(
+        """INSERT INTO refine_runs (volume, direction, slice_index, mode, target_type, grid_shape,
+                                    best_round, stop_reason, stop_message, constants)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (volume, direction, slice_index, mode, target_type, json.dumps(list(grid_shape)),
+         result["best_round"], result["stop_reason"], result["stop_message"], json.dumps(result["constants"])))
+    run_id = cur.lastrowid
+    for r in result["rounds"]:
+        conn.execute(
+            """INSERT INTO refine_rounds (run_id, round, prompts, metrics, score, delta, correction,
+                                          truth_reference, mask_rle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (run_id, r["round"], json.dumps(r["prompts"]), json.dumps(r["metrics"]), r["score"], r["delta"],
+             json.dumps(r["correction"]) if r["correction"] is not None else None,
+             json.dumps(r.get("truth_reference")) if r.get("truth_reference") is not None else None,
+             json.dumps(mask_to_rle(r["mask"]))))
+    conn.commit()
+    conn.close()
+    return run_id
+
+
+def get_refine_run(run_id: int) -> Optional[dict]:
+    """The stored run with its rounds; masks decoded back to bool arrays."""
+    conn = get_conn()
+    run = conn.execute("SELECT * FROM refine_runs WHERE id = ?", (run_id,)).fetchone()
+    if run is None:
+        conn.close()
+        return None
+    rows = conn.execute("SELECT * FROM refine_rounds WHERE run_id = ? ORDER BY round", (run_id,)).fetchall()
+    conn.close()
+    shape = tuple(json.loads(run["grid_shape"]))
+    rounds = [{
+        "round": r["round"], "prompts": json.loads(r["prompts"]), "metrics": json.loads(r["metrics"]),
+        "score": r["score"], "delta": r["delta"],
+        "correction": json.loads(r["correction"]) if r["correction"] else None,
+        "truth_reference": json.loads(r["truth_reference"]) if r["truth_reference"] else None,
+        "mask": rle_to_mask(json.loads(r["mask_rle"]), shape),
+    } for r in rows]
+    return {"run_id": run["id"], "volume": run["volume"], "direction": run["direction"],
+            "index": run["slice_index"], "mode": run["mode"], "target_type": run["target_type"],
+            "grid_shape": list(shape), "best_round": run["best_round"], "stop_reason": run["stop_reason"],
+            "stop_message": run["stop_message"], "constants": json.loads(run["constants"]), "rounds": rounds}

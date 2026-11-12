@@ -34,6 +34,10 @@ HTTP API (`src/server.py`):
 
 - `POST /api/npy/{vol}/embed` `{direction, index, mode}` — the server renders the slice (grey 2–98 % stretch, uniform integer upscale) and embeds it for SAM; returns `embedding_id`, `image_size`, `scale`, `grid_shape`. The UI must use this for NPY volumes and never embed a canvas screenshot (it carries pick markers and overlays; bug B1).
 
+QC-driven refine loop (spec: `.kiro/specs/qc-refine-loop/`):
+- `POST /api/npy/{vol}/refine` `{direction, index, mode, target_type, points: [[nx, ny]], labels, max_rounds, write_mask}` — embed once, up to 3 rounds of SAM + label-free QC (always on the raw slice) + one corrective point; returns and stores the round log; writes the best mask to `sam_mask`
+- `GET /api/refine/{run_id}` — the stored run, identical to the original response
+
 Volume mask and propagation (spec: `.kiro/specs/volume-propagation/`):
 - `POST /api/npy/{vol}/mask` — write one slice's SAM mask into `data/npy/{vol}/masks/<name>.npy` (bool, same shape as the volume) plus `<name>.json` provenance
 - `POST /api/npy/{vol}/propagate` — grow a seed slice along its normal axis inside a bounded box
