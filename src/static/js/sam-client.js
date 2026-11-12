@@ -98,7 +98,27 @@ async function runSAMInference() {
                 body: JSON.stringify({mask_path:'', score:result.scores[0], mask_shape:result.mask_shape})
             });
         }
-        setStatus('ready', `✅ SAM 完成 · Score: ${result.scores[0].toFixed(3)} · ${picks.length} 点`);
+        // 6. 回映射到三维体 mask (仅 NPY 卷): 切片 mask -> 体素
+        let volNote = '';
+        if (volInfo.source === 'api/npy' && volInfo.name) {
+            try {
+                const vr = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/mask`, {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        direction: curDir, index: curIndex, mask: result.mask,
+                        mask_name: 'sam_mask', mode: 'replace', score: result.scores[0],
+                        points: picks.map(p => ({x: p.nx != null ? p.nx : p.x, y: p.ny != null ? p.ny : p.y, label: p.label}))
+                    })
+                });
+                if (vr.ok) {
+                    const v = await vr.json();
+                    volNote = ` · 体素 ${v.total_voxels} (${v.slices_written} 切片)`;
+                } else {
+                    volNote = ' · 体 mask 写入失败';
+                }
+            } catch (e) { volNote = ' · 体 mask 写入失败'; }
+        }
+        setStatus('ready', `✅ SAM 完成${volNote} · Score: ${result.scores[0].toFixed(3)} · ${picks.length} 点`);
     } catch(e) {
         setStatus('error', '推理失败: ' + e.message);
     } finally { isInferring = false; }
@@ -485,3 +505,99 @@ const validationModal = document.getElementById('validationModal');
 document.getElementById('validationModalClose').onclick = () => validationModal.style.display = 'none';
 document.getElementById('validationModalOk').onclick = () => validationModal.style.display = 'none';
 validationModal.addEventListener('click', e => { if (e.target === validationModal) validationModal.style.display = 'none'; });
+
+// ═══════════════════════════════════════════════════════
+// 三维体 mask 叠加显示 & 跨切片传播
+// ═══════════════════════════════════════════════════════
+
+const VOL_MASK_NAME = 'sam_mask';
+
+// 切换切片后, 若体 mask 在该切片有内容, 载入为叠加层 (与 SAM logits 共用同一渲染)
+async function loadVolumeMaskOverlay(dir, index) {
+    if (volInfo.source !== 'api/npy' || !volInfo.name) return;
+    try {
+        const r = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/mask/${VOL_MASK_NAME}/slice/${dir}/${index}`);
+        if (!r.ok) return;
+        const rows = +r.headers.get('X-Rows'), cols = +r.headers.get('X-Cols');
+        const arr = new Float32Array(await r.arrayBuffer());
+        if (dir !== curDir || index !== curIndex || arr.length !== rows * cols) return;  // 用户已切走
+        let any = false;
+        for (let i = 0; i < arr.length; i++) if (arr[i] > 0.5) { any = true; break; }
+        if (!any) return;
+        logitsMap = arr; logitsHeight = rows; logitsWidth = cols;
+        drawSeismic();
+    } catch (e) { /* 无体 mask 时静默 */ }
+}
+
+const propPanel = document.getElementById('propPanel');
+const propSliders = [
+    ['propIl', 'propIlVal', v => String(v)],
+    ['propXl', 'propXlVal', v => String(v)],
+    ['propV', 'propVVal', v => String(v)],
+    ['propIou', 'propIouVal', v => (+v).toFixed(2)],
+].map(([id, valId, fmt]) => {
+    const el = document.getElementById(id), lab = document.getElementById(valId);
+    el.addEventListener('input', () => { lab.textContent = fmt(el.value); });
+    return el;
+});
+
+function syncPropSliderLimits() {
+    // 滑杆上限随当前卷尺寸变化 (最大 = 轴长 - 1)
+    const setMax = (id, n) => {
+        const el = document.getElementById(id);
+        el.max = Math.max(1, (n || 1) - 1);
+        if (+el.value > +el.max) { el.value = el.max; el.dispatchEvent(new Event('input')); }
+    };
+    setMax('propIl', volInfo.ilCount);
+    setMax('propXl', volInfo.xlCount);
+    setMax('propV', volInfo.tsCount);
+}
+
+document.getElementById('btnPropSettings').onclick = e => {
+    e.stopPropagation();
+    syncPropSliderLimits();
+    propPanel.style.display = propPanel.style.display === 'none' ? 'block' : 'none';
+};
+document.addEventListener('click', e => {
+    if (propPanel.style.display !== 'none' && !propPanel.contains(e.target)) propPanel.style.display = 'none';
+});
+
+let isPropagating = false;
+
+async function runPropagation() {
+    if (volInfo.source !== 'api/npy' || !volInfo.name) {
+        setStatus('error', '传播仅支持 NPY 卷'); return;
+    }
+    if (isInferring || isPropagating) { setStatus('loading', '⏳ 推理/传播进行中，请等待...'); return; }
+    if (!logitsMap) { setStatus('error', '请先在当前切片运行 SAM (▶ SAM) 生成种子 mask'); return; }
+
+    isPropagating = true;
+    const btn = document.getElementById('btnPropagate');
+    btn.disabled = true;
+    const lim = {
+        max_il: +document.getElementById('propIl').value,
+        max_xl: +document.getElementById('propXl').value,
+        max_vertical: +document.getElementById('propV').value,
+        min_iou: +document.getElementById('propIou').value,
+    };
+    setStatus('loading', `🔁 传播中 (IL ±${lim.max_il}, XL ±${lim.max_xl}, 纵向 ±${lim.max_vertical})...`);
+    try {
+        const resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/propagate`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({direction: curDir, index: curIndex, mask_name: VOL_MASK_NAME, ...lim})
+        });
+        if (!resp.ok) throw new Error((await resp.json()).detail);
+        const r = await resp.json();
+        const n = r.written_indices.length;
+        const stops = [...new Set(r.slices.filter(s => s.stopped).map(s => s.stopped))];
+        setStatus('ready', `✅ 传播完成 · 新增 ${n} 张切片 · 体素 ${r.total_voxels}` +
+            (stops.length ? ` · 停止原因: ${stops.join('/')}` : ''));
+    } catch (e) {
+        setStatus('error', '传播失败: ' + e.message);
+    } finally {
+        isPropagating = false;
+        btn.disabled = false;
+    }
+}
+
+document.getElementById('btnPropagate').onclick = () => runPropagation();

@@ -98,6 +98,22 @@
         <button class="action-btn" id="btnDelPoints">Undo</button>
         <button class="action-btn" id="btnClearMask">Clear</button>
         <button class="action-btn" id="btnRunSAM" style="font-weight:bold;color:#0055cc;" title="运行 SAM3 分割推理 (拾取点后点击)">▶ SAM</button>
+        <button class="action-btn" id="btnPropagate" style="color:#007755;" title="以当前切片的 SAM mask 为种子, 向相邻切片自动传播 (需先运行 SAM)">🔁 传播</button>
+        <span style="position:relative;display:inline-block;">
+            <button class="action-btn" id="btnPropSettings" title="传播范围设置">⚙</button>
+            <div id="propPanel" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:#fff;border:1px solid var(--ui-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);width:270px;font-size:12px;">
+                <div style="font-weight:bold;margin-bottom:6px;">传播范围限制</div>
+                <label style="display:block;margin:6px 0;">Inline 范围 ±<b id="propIlVal">5</b>
+                    <input type="range" id="propIl" min="0" max="20" value="5" step="1" style="width:100%"></label>
+                <label style="display:block;margin:6px 0;">Crossline 范围 ±<b id="propXlVal">5</b>
+                    <input type="range" id="propXl" min="0" max="20" value="5" step="1" style="width:100%"></label>
+                <label style="display:block;margin:6px 0;">纵向范围 ±<b id="propVVal">30</b> 采样点
+                    <input type="range" id="propV" min="0" max="100" value="30" step="1" style="width:100%"></label>
+                <label style="display:block;margin:6px 0;">停止阈值 IoU &lt; <b id="propIouVal">0.10</b>
+                    <input type="range" id="propIou" min="0" max="0.9" value="0.1" step="0.05" style="width:100%"></label>
+                <div style="color:#666;line-height:1.5;">沿当前方向传播时, 该轴的范围是步数上限; 另外两轴的范围是 mask 外扩上限。默认 5。</div>
+            </div>
+        </span>
         <button class="action-btn" id="btnExportMask" style="color:#880088;" title="导出 SAM 分割轮廓为多边形">📦 Export Mask</button>
         <button class="action-btn" id="btnValidate" style="color:#0066aa;" title="验证 SAM 分割结果精度 (需先运行 SAM)">✅ 验证</button>
         <button class="action-btn" id="btnExport" style="font-weight:bold;color:#005500;">Export</button>

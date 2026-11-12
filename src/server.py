@@ -47,6 +47,8 @@ import sam_service
 import sgy_service
 import npy_service
 import zarr_service
+import volume_mask_service
+import propagation_service
 import validation_service
 import vds_service
 import database
@@ -533,6 +535,105 @@ async def npy_read_timeslice(vol_name: str, sample_index: int):
         raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+# ══════════════════════════════════════════════════════════════
+# 三维体 mask API — SAM 切片 mask 回映射并写入体素 mask
+# ══════════════════════════════════════════════════════════════
+
+class SliceMaskRequest(BaseModel):
+    direction: str                       # inline | crossline | timeslice
+    index: int                           # 切片序号 (0 基)
+    mask: list[list[float]]              # SAM 返回的 2D mask (任意尺寸, 覆盖整张切片图像)
+    mask_name: str = "sam_mask"
+    threshold: float = 0.5
+    mode: str = "replace"                # replace | union
+    score: float | None = None
+    points: list[dict] = []
+
+
+def _npy_vol_dir(vol_name: str) -> Path:
+    base = (DATA_DIR / "npy").resolve()
+    p = (base / vol_name).resolve()
+    if p.parent != base or not (p / "amplitude.npy").exists():
+        raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
+    return p
+
+
+@app.post("/api/npy/{vol_name}/mask")
+async def npy_write_slice_mask(vol_name: str, req: SliceMaskRequest):
+    """把一张切片的 2D mask 回映射到体网格并写入体 mask"""
+    npy_dir = _npy_vol_dir(vol_name)
+    try:
+        return volume_mask_service.write_slice_mask(
+            str(npy_dir), req.mask_name, req.direction, req.index, req.mask,
+            threshold=req.threshold, mode=req.mode, score=req.score, points=req.points)
+    except IndexError as e:
+        raise HTTPException(400, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class PropagateRequest(BaseModel):
+    direction: str                 # 种子切片方向, 也是传播方向
+    index: int                     # 种子切片序号 (0 基)
+    mask_name: str = "sam_mask"
+    max_il: int = 5                # IL 半宽 (inline 传播=步数上限; 其他方向=横向外扩上限)
+    max_xl: int = 5                # XL 半宽
+    max_vertical: int = 30         # 纵向(采样点)半宽
+    min_iou: float = 0.1           # 与上一张 IoU 低于此值则停止 (防漂移)
+
+
+@app.post("/api/npy/{vol_name}/propagate")
+def npy_propagate(vol_name: str, req: PropagateRequest):
+    """以体 mask 中的种子切片为起点, 跨切片传播 SAM 分割 (范围受 max_il/max_xl/max_vertical 限制)"""
+    npy_dir = _npy_vol_dir(vol_name)
+    try:
+        return propagation_service.propagate(
+            str(npy_dir), req.mask_name, req.direction, req.index,
+            max_il=req.max_il, max_xl=req.max_xl, max_vertical=req.max_vertical, min_iou=req.min_iou)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except (IndexError, ValueError) as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/npy/{vol_name}/masks")
+async def npy_list_masks(vol_name: str):
+    return {"masks": volume_mask_service.list_masks(str(_npy_vol_dir(vol_name)))}
+
+
+@app.get("/api/npy/{vol_name}/mask/{mask_name}/info")
+async def npy_mask_info(vol_name: str, mask_name: str):
+    """体 mask 信息: 逐切片来源、体素数、以 il/xl/采样 表示的包围盒与质心"""
+    npy_dir = _npy_vol_dir(vol_name)
+    try:
+        meta = npy_service.get_metadata(str(npy_dir))
+        return volume_mask_service.get_mask_info(str(npy_dir), mask_name, meta)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/npy/{vol_name}/mask/{mask_name}/slice/{direction}/{index}")
+async def npy_read_mask_slice(vol_name: str, mask_name: str, direction: str, index: int):
+    """读取体 mask 的某张切片 (二进制 float32 0/1, 朝向与振幅切片一致)"""
+    npy_dir = _npy_vol_dir(vol_name)
+    try:
+        vol = volume_mask_service.read_mask_volume(str(npy_dir), mask_name)
+        if direction not in volume_mask_service.DIRECTIONS:
+            raise ValueError(f"未知方向: {direction}")
+        if not (0 <= index < volume_mask_service.slice_max_index(direction, vol.shape)):
+            raise IndexError(f"索引 {index} 超出范围")
+        view = volume_mask_service._slice_view(vol, direction, index)
+        return _npy_binary_response(np.array(view, dtype=np.float32))
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except (IndexError, ValueError) as e:
+        raise HTTPException(400, str(e))
 
 
 # ══════════════════════════════════════════════════════════════

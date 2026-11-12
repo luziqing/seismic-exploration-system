@@ -323,6 +323,7 @@ async function loadAndRenderSlice(dir, index) {
         logitsMap = null; logitsWidth = 0; logitsHeight = 0;
         embeddingId = null;  // 新切片需要重新计算 embedding
         drawSeismic();
+        loadVolumeMaskOverlay(dir, index);  // 若该切片已有体 mask (含传播结果) 则叠加显示
         updateSubtitle(dir, index);
         updateLineControls(index);
         // 创建新拾取会话
