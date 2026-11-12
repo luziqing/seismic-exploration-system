@@ -93,6 +93,10 @@ In-process, click = interior point of the truth slice, inlines 16 / 20 / 24, `wr
 - [ ] `scripts/test_refine_e2e.py`: real SAM run completes, log replays through `GET /api/refine/{run_id}`
 - [ ] Results and allowed wording in `docs/MEASUREMENTS.md`; nothing about the loop in README or video before this
 
+## Order and limits (scope.md §0, 2026-11-12)
+
+Wave 5's `measure_refine.py` runs **before** Wave 4, once, with one declared click rule; its output sets two UI defaults (view SAM segments, Auto-refine on/off). No other experiments. The UI offers the deep target only.
+
 ## Cut rule (from scope.md)
 
 If M2 slips: drop fault continuity (Requirement 2 and its tasks), keep the deep-target loop, and hide the fault option in the UI.

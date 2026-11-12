@@ -8,6 +8,21 @@ inclusion: always
 >
 > Submission deadline: **Fri 2026-12-04 14:00 PT = Sat 12-05 06:00 Beijing.** Internal target: **Thu 12-03**. The project must stay runnable until judging ends **2027-01-29**.
 
+## 0. Status and convergence rules (2026-11-12) — read this first
+
+**Done:** S1 low-freq slices · S2 Raw/Low-freq + Noisy/Clean compare · S3 visibility numbers (`docs/MEASUREMENTS.md`) · S13 survey map · B1 browser SAM fix · S4 QC (design C + raw view + reliability gate) · S5 loop + API + SQLite log. 178 tests green, all pushed to `origin/kiro`.
+
+**Left, in this order:** M2 = `measure_refine.py` + S6 panel → M3 = S11 Kiro evidence, S8 English UI, S7, S10, S9 test build, E2 on `gpu4090` → freeze 11-27 → M4 = video, README, Devpost.
+
+**Not started and worth 40 % of the score together:** Technological Implementation (Kiro evidence, S11) and Presentation (video, S12). They get fixed days (§7) and are not squeezed by feature work.
+
+**Convergence rules:**
+1. **No more research or redesign.** The QC design, its constants and the H1/H2 metric are frozen. A new weakness is written down as a limitation in `docs/MEASUREMENTS.md` or the spec, not fixed by a new design.
+2. **One measurement, run once.** `measure_refine.py` uses one declared click rule, compares raw vs low-freq view and 1 round vs loop, and its output decides two UI defaults (which view SAM segments, whether Auto-refine is on). No follow-up experiments.
+3. **The demo story follows the numbers.** If SAM does better on the raw view, the story is "the low-freq view helps the interpreter see; SAM and QC work on raw". If the loop rarely beats round 1, H3 is presented as "checks itself, fixes poor clicks, never keeps a worse round", which the diagnostic runs already support.
+4. **Deep target only in the UI.** Fault QC stays in code and tests, not in the panel.
+5. Anything not in §3.1 needs the owner's yes first (existing rule).
+
 ## 1. Goal
 
 A geophysicist or judge clones the public repo, runs one setup command and opens the app on a desktop machine. They see a synthetic section with a weak deep target, make it more visible with the low-frequency view and the noisy/clean pair, prompt SAM3, and watch a label-free QC loop refine the mask for up to 3 rounds, then export the result. A <3 min public video shows the same flow on the local GPU machine, and the README explains how Kiro built it.
@@ -104,11 +119,11 @@ Rule for the write-up: describe only what was actually done, with a pointer to t
 
 | Milestone | Window | Work | Exit check | If missed |
 |---|---|---|---|---|
-| M1 H1/H2 visible | 11-12 → 11-16 | Scope + specs committed (11-12); S1 (11-13); `hypothesis` + PBT for lowfreq (11-14); S2 (11-15); S3 (11-16) | V2 and V3 recordable; S3 prints stable numbers | Drop side-by-side, keep the toggle |
-| M2 H3 loop | 11-17 → 11-23 | `qc-refine-loop` spec (11-17); S4 + PBT (11-18 → 11-19); S5 (11-20 → 11-21); S6 (11-22); E5 (11-23) | Loop runs live on the deep target; tests green | Drop fault continuity; deep target only |
-| M3 Product + test build | 11-24 → 11-29 | S7 (11-24); S8 (11-25); S9 + S10 + E1 (11-26); S11 hooks / agent (11-27 → 11-28); E2, E3, E6 (11-29) | Clean clone works on a second machine with and without weights | Cut S11 to what exists |
-| **Feature freeze** | **11-30** | Bug fixes, copy and video only from here | — | — |
-| M4 Submission | 11-30 → 12-03 | E4 dry run + record (11-30 → 12-01); README final, `claims-auditor` review, E7 (12-02); merge to `main`, tag, push, Devpost submit (12-03) | Checklist ticked | 12-04 is buffer for form problems only |
+| M1 H1/H2 visible | 11-12 | **Done 11-12**: S1, S2, S3, S13 | — | — |
+| M2 H3 loop | 11-13 → 11-17 | Backend **done 11-12** (S4, S5 API). Left: `measure_refine.py`, one declared click rule, run once (11-13); S6 panel, deep target only (11-14 → 11-15); browser check (11-16); buffer (11-17) | Loop runs live in the UI on the clean volume; tests green | Panel shows rounds without round selection |
+| M3 Product + test build | 11-18 → 11-26 | S11 Kiro evidence: hooks, `claims-auditor`, CLI run, README Kiro section draft (11-18 → 11-19); S8 English UI + toolbar declutter (11-20 → 11-21); S7 + S10 (11-22); S9 + E1 (11-23); E2 on `gpu4090`, E3, E6 (11-24 → 11-25); buffer (11-26) | Clean clone works on `gpu4090` with and without weights | Cut S11 to what exists |
+| **Feature freeze** | **11-27** | Bug fixes, copy and video only from here | — | — |
+| M4 Submission | 11-27 → 12-03 | Video script (11-27); E4 dry run + record (11-28 → 11-29); README final, `claims-auditor` review, E7 (11-30 → 12-01); merge to `main`, tag, push (12-02); Devpost submit (12-03) | Checklist ticked | 12-04 is buffer for form problems only |
 
 Rule from `docs/PROJECT_PLAN.md`: if any criterion looks below 7/10, fix that criterion before adding anything.
 
