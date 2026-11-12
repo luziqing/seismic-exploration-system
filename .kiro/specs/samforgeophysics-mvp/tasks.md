@@ -14,7 +14,7 @@
 
 ## Wave 2 — Conditioning and QC (depends on Wave 1 generator)
 
-- [ ] `src/lowfreq_service.py` — spectral weighting on a 2-D slice, raw volume preserved
+- [x] `src/lowfreq_service.py` — spectral weighting on a 2-D slice, raw volume preserved (done 2026-11-09)
 - [ ] Wire low-frequency mode into `src/server.py` slice endpoints
 - [ ] Add low-frequency toggle / comparison in `src/static/js/`
 - [ ] `src/qc_service.py` — fault continuity, horizon closure error, reuse of `validation_service.py`
