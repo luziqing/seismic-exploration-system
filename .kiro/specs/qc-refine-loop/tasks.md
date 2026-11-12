@@ -13,6 +13,16 @@
 - [ ] `tests/test_qc_service.py`: constructed slices — exact mask beats mask + background, mask − part of target, empty, full; fault score drops with a gap and with a fragment; time-slice fallback labelled `abs`
 - [ ] `tests/test_qc_service_pbt.py` (`hypothesis`): adding background pixels never raises the score; removing target pixels next to an exact mask never raises it; score in `[0, 1]`; same input → same output. Record any bug PBT finds that the unit tests missed (for the README PBT answer)
 
+### Findings 2026-11-12 — the declared QC design does not meet Requirement 1.3
+
+Implemented exactly as declared (`RING_PX 4`, `BG_PERCENTILE 75`, `TARGET_PERCENTILE 25`, `CONTRAST_REF_DB 6`); 15 unit tests on constructed slices pass. Then:
+
+1. **Property-based test found a counterexample the unit tests missed.** `test_adding_background_never_improves_the_mask` fails: for a block at rows 8–19, cols 4–11, adding a band of pure-noise *amplitude* below it raised the score 0.9643 → 0.9677 (miss 0.036 → 0.032). In a direct scan, 583 of 900 such cases raised the score. Cause: the Hilbert envelope spreads target energy a few samples past the target's edge, so the ring right next to an exact mask looks target-like ("miss"); growing the mask into that halo lowers `miss`.
+2. **On the demo volumes the ground-truth mask is not ranked best.** Inlines 16 / 20 / 24, truth mask vs truth grown 20 rows upward vs truth cut in half: the truth mask had the highest score in **0 of 12** (2 volumes × 2 views × 3 inlines). Raw view: truth scores 0.000–0.019. Cause: the fourth horizon runs about 3–10 samples above the target window over the target traces and is brighter than the target (raw envelope ≈ 0.38 vs ≈ 0.09 inside, clean volume), so the ring contains it and growing the mask into it looks like an improvement. With this QC, the loop would steer SAM toward the horizon.
+3. While diagnosing, two variants were tried on the demo data (`BG_PERCENTILE 50`; a low-frequency-fraction evidence map). Neither ranked the truth best consistently (1/12 and 5/10). These were exploratory looks at demo truth, so neither may be adopted on that basis.
+
+Status: `qc_service.py` and its tests are committed as a record; the failing property is marked `xfail(strict=True)` pointing here. Wave 1 is **not** done. A redesign needs the owner's decision (see the S4 row in `scope.md`).
+
 ## Wave 2 — Loop driver (S5; Requirement 3) — due 11-20
 
 - [ ] `src/refine_service.py`: `run(...)` with injectable `segment_fn`; correction at the interior point of the larger of the largest leak / miss regions; stops `max_rounds`, `no_gain`, `nothing_to_fix`, `empty_mask`; best round = highest score, earliest on ties; embed once
