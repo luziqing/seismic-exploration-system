@@ -2,7 +2,7 @@
 
 Interpret a weak deep seismic target with SAM3, a low-frequency view and a QC loop that checks its own masks.
 
-Kiroween 2026 entry, **Frankenstein** category: Meta's SAM3, a vision model trained on natural images, stitched into a seismic interpretation workstation with signal processing and a label-free quality check. Built with Kiro (see [How Kiro was used](#how-kiro-was-used)).
+Meta's SAM3, a vision model trained on natural images, stitched into a seismic interpretation workstation together with signal processing and a label-free quality check.
 
 ## What it does
 
@@ -27,7 +27,7 @@ Every number below is printed by a script and recorded with its conditions in [`
 
 IoU is measured against the generator's ground-truth mask, which the loop never sees. The loop is not guaranteed to improve a mask: on 3 of the 19 clean slices it kept a round that scored better on QC but worse against the truth.
 
-## Run it (test build)
+## Run it
 
 The app is a local web app: a Python server plus a page in your browser. There is no hosted instance.
 
@@ -113,7 +113,7 @@ Open <http://127.0.0.1:9339>. The first SAM run also loads the model, so it take
 python scripts/verify.py        # or: npm run verify
 ```
 
-It checks JavaScript and Python syntax, runs the competition preflight and the test suite, and confirms that the demo data is byte-identical to the generator's output. It prints `VERIFY OK` when everything passes.
+It checks JavaScript and Python syntax, runs the project's preflight checks and the test suite, and confirms that the demo data is byte-identical to the generator's output. It prints `VERIFY OK` when everything passes.
 
 ### No-weights mode
 
@@ -128,7 +128,7 @@ Without `data/weights/sam3.pt` the app still opens. Browsing, the low-frequency 
 5. Press **Export Mask**: you get `…geojson`, `…csv` and `qc_log_….json`.
 6. Optional: **Propagate** extends the mask to neighbouring inlines (settings under ⚙).
 
-Other controls (SEG-Y / VDS loading, playback, gain, AI assistant) are under **More ▾**; they come from the earlier SGSeg project and are not part of this entry.
+Other controls (SEG-Y / VDS loading, playback, gain, AI assistant) are under **More ▾**; they come from the earlier SGSeg project and are not part of this project.
 
 ## How it works
 
@@ -144,48 +144,30 @@ Other controls (SEG-Y / VDS loading, playback, gain, AI assistant) are under **M
 
 Design decisions and their reasons, including the ones that failed, are in `.kiro/specs/qc-refine-loop/` (requirements → design → tasks with dated findings).
 
-## How Kiro was used
+## How the engineering is organised
 
-Everything below is committed under [`/.kiro`](.kiro) and in the scripts it calls.
+The software is built the way an experiment is run: the question and the test are written down before the answer is known, and the result decides what ships. The repository keeps the whole record, failures included.
 
-**Kiro CLI and Kiro IDE.** Both were used; Kiro Web and Kiro Crew were not. The two share one configuration: the specs, steering files and hooks under `/.kiro` are read by the IDE and by the CLI alike, so the same rules and checks applied in both. The IDE was used for editing and reviewing the code and documents directly. The CLI ran the agent sessions: spec writing, implementation, test and GPU measurement runs, browser checks and commits. Larger independent jobs were handed to sub-agents with fresh context, some in parallel: the English translation of the frontend, the translation of the server messages alongside the export rewrite, a documentation check of Kiro's hook and agent formats, and the clean-clone test on a second machine by a session that had not seen the repository. What each was asked and what it reported is in [`docs/kiro/build-log.md`](docs/kiro/build-log.md).
+1. **Question before code.** Each feature starts as a spec in `.kiro/specs/` with acceptance criteria written before any result is seen: requirements, then design, then tasks. The QC loop's spec was written first; when the first QC design failed its own criterion on the demo data (the ground truth ranked best in 0 of 12 checks, and a property-based test found that adding background could raise the score), the design was changed in the spec first and then in the code. The failure and the redesign stay in `qc-refine-loop/tasks.md`.
+2. **Measurement as the arbiter.** A result comes from a script with its protocol declared at the top before the first run: fixed data, a fixed click rule, a fixed metric, run once, reruns byte-identical. Its output, not preference, set the product defaults: SAM3 segments the raw slice because the low-frequency view measured worse for it, although the low-frequency view helps a human see the target. Every public number points to `docs/MEASUREMENTS.md`, together with what it does *not* show.
+3. **An explicit boundary.** `.kiro/steering/scope.md` lists what is built, the check that proves each item done, and rules for converging: no redesign after a fixed date, one measurement run, the story follows the numbers. Anything outside it waits.
+4. **Rules that execute.** Constraints are code, not prose: steering files give every agent session the same rules; hooks run the matching tests when a module is saved, block commits of data or weights, and check public text for unsourced claims; `scripts/verify.py` proves the build in one command; a read-only reviewer agent audits the README and other public text against the measurements.
+5. **People decide, agents build, other agents check.** The owner made the decisions that change meaning (which QC design, which view the QC reads, what is in scope), each from a written list of options with their trade-offs. Agent sessions implemented and tested. Verification was handed to agents with a fresh context, for example a clean install on a second machine by a session that had never seen the repository, following only this README.
 
-**Spec-driven development.** Three specs in `.kiro/specs/`:
-- `samforgeophysics-mvp`: the product spec.
-- `qc-refine-loop`: written **before** the code. Its `tasks.md` records what happened when the declared design met data: the first QC design failed its own acceptance criterion (a property test found a counterexample and the ground truth ranked best on 0 of 12 demo checks), the owner chose a redesign, and the spec was changed first, then the code. The measurement protocol was declared in the script before its only run, and its results set two UI defaults.
-- `volume-propagation`: written **after** the code, to document and test it.
+**Where this leads.** The same organisation is meant to carry the work past synthetic data. Moving to field data does not change the method: declare the metric and the protocol, run once, report what failed. The label-free QC carries a pattern worth keeping in geophysical software: a model output that comes with its own check, and that declines to act when the check is not reliable (here, the noisy volume). Faults and horizons are the next targets for that pattern, and the spec, measurement and audit trail in this repository is how a reader can see whether it worked.
 
-Compared with prompting feature by feature, the spec made the failure visible: the acceptance criteria were fixed before any result was seen, so a QC that "looked fine" on demo data could not be tuned until it passed.
+## Why this was entered in Kiroween
 
-**Steering.** `.kiro/steering/`: `product`, `tech`, `structure`, `competition` and `scope` are always included; `seismic-domain` loads automatically; `sources` (verified prior work) is manual. `scope.md` is the boundary: work that does not map to one of its items is not started, and it holds the convergence rules (no more redesign, one measurement run, the demo story follows the numbers).
+The hackathon was a test of a question the author has as a researcher: can an agent-driven, spec-first workflow build research software that stays honest about its evidence, within five weeks, with one person making the decisions? The hope is feedback from both sides, geophysicists on whether the workflow is useful and developers on whether the engineering method holds up. How Kiro's tools were used is documented separately in [`docs/kiro/KIRO_USAGE.md`](docs/kiro/KIRO_USAGE.md).
 
-**Agent hooks.** `.kiro/hooks/`:
-- `dev-loop.json`
-  - `PostFileSave` on `src/*.py`: runs that module's tests (`scripts/hooks/test_for_saved_file.py`).
-  - `PostFileSave` on `src/static/js/*.js`: syntax-checks the frontend scripts.
-  - `PreToolUse` on the shell: blocks `git add` of data, weights or volume files, `git add --force`, force pushes and `git reset --hard` (`scripts/hooks/guard_shell.py`, exit code 2).
-  - `Stop`: re-runs the claims check at the end of every agent turn.
-- `competition-guards.json`: keeps `/.kiro` out of `.gitignore`; rejects forbidden claims when docs change.
-- `data-provenance.json`, `synthetic-data.json`: public-data policy and generator determinism.
+## What is new, and what came before
 
-Tests for the hook scripts and the hook files are in `tests/test_hooks.py`.
-
-**Custom agent.** `.kiro/agents/claims-auditor.json` is a read-only reviewer for public text: every number must trace to `docs/MEASUREMENTS.md`, no forbidden claims, SGSeg reuse disclosed, every Kiro claim backed by a file. Run it with `kiro-cli chat --agent claims-auditor`. Its first run on this README (headless, `kiro-cli chat --v3 --no-interactive --agent claims-auditor`) failed it with 7 items, including a wrong start date and two unbacked claims; the run and the fixes are in [`docs/kiro/claims-audit-2026-11-12.md`](docs/kiro/claims-audit-2026-11-12.md).
-
-**Property-based testing.** `hypothesis` tests in `tests/test_qc_service_pbt.py`. They caught a bug the unit tests missed: in the first QC design, *adding* background pixels to an exact mask raised its score (583 of 900 scanned cases), because the envelope spreads target energy past the target's edge. The same tests then defined the redesign's two stated resolution limits.
-
-**MCP.** Not used. The Pencil design MCP was available, but the panels were small enough to design directly in HTML.
-
-**Kiro powers.** Checked; no power was installed or used.
-
-## Built during Kiroween, and what came before
-
-This repository started on 2026-11-09 (first commit, `git log`). Part of it comes from **SGSeg**, the author's earlier seismic segmentation tool (begun in June 2026, part of the author's PhD work, solely the author's), which is disclosed here as required by the rules:
+This repository started on 2026-11-09 (first commit, `git log`). Part of it comes from **SGSeg**, the author's earlier seismic segmentation tool (begun in June 2026, part of the author's PhD work, solely the author's):
 
 - **From SGSeg:** the slice viewer and its SEG-Y / Zarr / VDS / NumPy loaders, the basic SAM3 embed-and-predict calls and point picking, the first GeoJSON / CSV export, IoU / Dice validation, the LLM assistant, SQLite sessions and local backup.
-- **Built for this entry (from 2026-11-09):** the synthetic model and its ground truth; the low-frequency view and the noisy / clean comparison; the measurement scripts; server-side SAM3 rendering; the volume mask, propagation and survey map; the label-free QC, the refine loop, its API, log and panel; the rewritten export with the QC log; the no-weights mode; the English UI; and the whole `/.kiro` workflow.
+- **Built in this repository (from 2026-11-09):** the synthetic model and its ground truth; the low-frequency view and the noisy / clean comparison; the measurement scripts; server-side SAM3 rendering; the volume mask, propagation and survey map; the label-free QC, the refine loop, its API, log and panel; the rewritten export with the QC log; the no-weights mode; the English UI; and the whole `/.kiro` workflow.
 
-Prior work on SAM for seismic exists and this project does not claim to be the first: *Seismic Fault SAM* ([arXiv:2407.14121](https://arxiv.org/abs/2407.14121)) and *Domain-Guided Prompting of SAM for Seismic Interpretation* ([arXiv:2606.15786](https://arxiv.org/abs/2606.15786)), which also conditions SAM's input with seismic attributes. What this entry adds is the label-free QC loop that decides for itself when it can be trusted, and the noisy / clean pair.
+Prior work on SAM for seismic exists and this project does not claim to be the first: *Seismic Fault SAM* ([arXiv:2407.14121](https://arxiv.org/abs/2407.14121)) and *Domain-Guided Prompting of SAM for Seismic Interpretation* ([arXiv:2606.15786](https://arxiv.org/abs/2606.15786)), which also conditions SAM's input with seismic attributes. What this project adds is the label-free QC loop that decides for itself when it can be trusted, and the noisy / clean pair.
 
 ## Licence and data
 

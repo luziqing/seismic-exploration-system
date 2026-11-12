@@ -22,6 +22,7 @@ The single source of truth for scope and status is **`.kiro/steering/scope.md`, 
 5. `.kiro/steering/tech.md` and `structure.md` (stack, endpoints, module map).
 6. The spec of the area you work in: `.kiro/specs/qc-refine-loop/` (loop, QC, panel), `volume-propagation/`, `samforgeophysics-mvp/`.
 7. `README.md` (public text; it is what judges read).
+8. `docs/kiro/KIRO_USAGE.md`: the detailed Kiro write-up. The README keeps only the engineering method and a short note on why the project entered Kiroween (owner, 11-12); do not add hackathon detail back to the README. The Devpost text reuses KIRO_USAGE.md.
 
 ## 3. Non-negotiable rules
 
