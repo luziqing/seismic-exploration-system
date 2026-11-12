@@ -1,3 +1,5 @@
+> **Superseded for development work:** read [`guide.md`](guide.md) and `.kiro/steering/scope.md` section 0 first. This file is older (status and plans here may be out of date).
+
 # HANDOFF — Agent Briefing (Read This First)
 
 **Last updated**: 2026-11-09 · **Maintainer**: niky · **Status**: Wave 1 complete, engineering cleanup done, Wave 2 not started.

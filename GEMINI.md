@@ -1,3 +1,5 @@
+> **Superseded for development work:** read [`guide.md`](guide.md) and `.kiro/steering/scope.md` section 0 first. This file is older (status and plans here may be out of date).
+
 # GEMINI.md — SamForGeophysics (Kiroween 2026)
 
 > 本文档为 **SamForGeophysics** 参赛项目的核心开发与配置指南。

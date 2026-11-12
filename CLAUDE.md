@@ -1,3 +1,5 @@
+> **Superseded for development work:** read [`guide.md`](guide.md) and `.kiro/steering/scope.md` section 0 first. This file is older (status and plans here may be out of date).
+
 # CLAUDE.md — SamForGeophysics (Kiroween 2026 · Frankenstein)
 
 > 面向接手本项目的 Claude / Kiro agent。与 `GEMINI.md` 定位相同，但以 **2026-11-09 的代码实况** 为准，并给出到截止日为止的总体规划。

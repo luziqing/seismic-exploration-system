@@ -1,5 +1,7 @@
 # AGENTS.md — SamForGeophysics
 
+**Start with [`guide.md`](guide.md)**: rules, environment, traps, code map, remaining work and how to report for review.
+
 Read `.kiro/steering/product.md`, `tech.md`, `structure.md` and `competition.md` before changing code. They are the authoritative project constraints for any agent working here.
 
 Non-negotiables:
