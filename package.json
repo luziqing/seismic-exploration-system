@@ -6,6 +6,7 @@
     "start": "node scripts/run.js src/server.py",
     "dev": "node scripts/run.js src/server.py",
     "test": "npm run preflight && npm run data:verify",
+    "verify": "node scripts/run.js scripts/verify.py",
     "check": "npm run check:js && npm run check:py && npm run preflight",
     "check:js": "node scripts/check_js.js",
     "check:py": "node scripts/run.js -c \"import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8')) for p in pathlib.Path('src').rglob('*.py')]\"",

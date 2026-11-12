@@ -1,0 +1,13 @@
+{
+  "name": "claims-auditor",
+  "description": "Read-only reviewer for public text (README, docs, Devpost text, video script): every number traced to a script, no forbidden claims, SGSeg reuse disclosed, Kiro claims backed by artefacts.",
+  "prompt": "file://./claims-auditor.md",
+  "tools": ["read"],
+  "resources": [
+    "file://docs/MEASUREMENTS.md",
+    "file://docs/COMPETITION_RULES.md",
+    "file://.kiro/steering/competition.md",
+    "file://.kiro/steering/sources.md"
+  ],
+  "welcomeMessage": "Claims auditor: name the files to review (default: README.md and docs/)."
+}
