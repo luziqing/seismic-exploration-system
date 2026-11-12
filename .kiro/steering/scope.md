@@ -129,6 +129,18 @@ Rule from `docs/PROJECT_PLAN.md`: if any criterion looks below 7/10, fix that cr
 | Second machine for E2 | **Available:** `ssh gpu4090` (192.168.204.76, user `yuzu`, key `~/.ssh/id_ed25519_huawei`, already in `~/.ssh/config`). Windows 10 Pro for Workstations, RTX 4090 24 GB (driver 617.14), 128 GB RAM, 464 GB free on C:. Has Git; default Python is **3.14**, Python 3.12 available through `uv`; **no Node.js / npm**. Agents may use it only for E2/E6 test runs in a fresh folder under the user's home, and must not install system-wide software without asking |
 | YouTube upload (public) and Devpost submission | Owner, by 12-03 |
 
+### Weight sources on record (11-12; follow-ups deferred)
+
+| Source | File | Size (bytes) | Notes |
+|---|---|---|---|
+| <https://huggingface.co/facebook/sam3> (Meta, gated) | `sam3.pt` | 3,450,062,241 | **The one we use.** Byte-identical to local `data/weights/sam3.pt` (SHA-256 `9999e234…c3cf8c9e`) |
+| <https://huggingface.co/facebook/sam3.1> (Meta, gated) | `sam3.1_multiplex.pt` | 3,502,755,717 | Released 2026-03-27. Adds Object Multiplex for multi-object **video** tracking; the image point-prompt path keeps the SAM 3 architecture. Ultralytics loads it for image point/box prompts. Not used: no expected gain for single-slice point prompts, and switching would mean re-verifying the SAM path |
+| Owner's Google Drive mirror | `sam3.pt` + `LICENSE` | — | Upload in progress. `LICENSE` prepared at `data/weights/LICENSE` (SAM License, same Git object `16ee5f63…` as in both Meta repos) |
+
+Deferred, not in scope before 12-04 unless the owner reopens them:
+- Add the Drive link to the README as a backup source, after downloading it once on `gpu4090` and checking size + SHA-256 (with E2).
+- Evaluate SAM 3.1 (`sam3.1_multiplex.pt`) for single-slice prompts, and its video predictor for cross-slice propagation (after the deadline).
+
 ### What the second machine already tells us (feeds S9 / E2)
 
 - `requirements.txt` pins `numpy<2.0`; NumPy 1.26 has no wheels for Python 3.14, so `pip install` with the default Python on a fresh machine will fail. The README must state the supported Python range (3.10–3.12) and show how to create a venv with it.
