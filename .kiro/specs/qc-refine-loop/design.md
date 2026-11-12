@@ -46,7 +46,9 @@ sequenceDiagram
 
 Input: `slice2d` (float32, native grid, `rows = samples` for inline / crossline), `mask` (bool, same shape), `target_type`.
 
-**Envelope.** `env = |hilbert(slice2d, axis=0)|` for inline / crossline (time is axis 0). For time slices there is no time axis in the slice; QC uses `|slice2d|` and says so in the result (`envelope: "abs"`). Computed on the view the user segmented (`raw` or `lowfreq`), so QC judges what SAM saw.
+**Envelope.** `env = |hilbert(slice2d, axis=0)|` for inline / crossline (time is axis 0). For time slices there is no time axis in the slice; QC uses `|slice2d|` and says so in the result (`envelope: "abs"`). **Always computed on the raw slice** (decision A), even when SAM segmented the low-frequency view: the filter removes exactly the frequency difference that makes a brighter shallow reflector look different from the deep target.
+
+**Reliability gate (decision A).** `target_like_fraction` = share of all slice pixels that are target-like. Above `GATE_MAX_TARGET_LIKE_FRAC` the clicked reference does not single anything out (for example a target at the noise level), so the result carries `reliable: false` and a reason; the loop then stops after round 1 (`qc_unreliable`).
 
 **Ring.** `ring = dilate(mask, GUARD_PX + RING_PX) & ~dilate(mask, GUARD_PX)` (chessboard dilation), clipped to the slice. The guard band keeps the envelope's own halo just outside the target out of the ring.
 
@@ -76,6 +78,7 @@ Leak and miss pixels are kept as boolean maps so the driver can find their large
 | `GUARD_PX` | 2 | Skips the envelope halo next to the mask edge |
 | `RING_PX` | 4 | 4 native pixels (8 ms vertically, 4 traces laterally) of local background beyond the guard |
 | `SCORE_RESOLUTION` | 0.01 | Score differences below this carry no meaning: on 3,000 constructed scenes the largest amount by which a "mask + background band" outscored the exact mask was 0.0089. Equal to the loop's `MIN_GAIN` |
+| `GATE_MAX_TARGET_LIKE_FRAC` | 0.5 | If most of the slice looks like the clicked area, the click does not single out a target. Set from this definition before any check |
 | `CONTINUITY_TOL_COLS` | 1 | A fault may step one trace per sample row |
 
 Resolution limit: an error narrower than `GUARD_PX` lies inside the guard band and is not seen. The property tests state this explicitly (left-out bands wider than the guard).
@@ -93,6 +96,7 @@ run(slice2d, view_image, prompts, target_type, segment_fn, truth=None)
       # QC reference = the interpreter's positive clicks only; corrective points never move it
       if mask empty: record round, stop "empty_mask"
       q = qc.score(slice2d, mask, target_type)
+      if r == 1 and not q.reliable: record round 1, stop "qc_unreliable"   # no corrections on an unreliable QC
       record round r: prompts, q, Δ vs previous, truth overlap (if truth), mask
       if r > 1 and q.score < best.score + MIN_GAIN: stop "no_gain"     # best stays the earlier round
       best = round r                                                    # only reached with a gain >= MIN_GAIN

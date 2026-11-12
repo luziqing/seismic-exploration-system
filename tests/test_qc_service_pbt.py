@@ -114,6 +114,61 @@ def test_exact_mask_ranks_above_typical_mistakes(sc, depth):
 
 
 @PBT
+@given(scene())
+def test_visible_targets_pass_the_reliability_gate(sc):
+    s, m, click, _, _ = sc                         # target amplitude 0.5-3 on noise 0.05
+    assert qc.score_mask(s, m, click)["reliable"]
+
+
+@PBT
+@given(st.integers(0, 10_000), st.floats(6.0, 16.0), st.floats(0.0, 0.05))
+def test_targets_at_the_noise_level_fail_the_gate(seed, f, amp):
+    """Target amplitude at or below the noise standard deviation (0.05): the click singles nothing out."""
+    rng = np.random.default_rng(seed)
+    s = rng.normal(0.0, 0.05, (ROWS, COLS))
+    s[:, 10:24] += amp * ricker(f, 80)[:, None]
+    m = np.zeros((ROWS, COLS), bool)
+    m[70:90, 10:24] = True
+    r = qc.score_mask(s.astype(np.float32), m, [(80, 17)])
+    assert not r["reliable"] and r["target_like_fraction"] > qc.GATE_MAX_TARGET_LIKE_FRAC
+
+
+def test_qc_on_the_raw_view_always_rejects_a_brighter_reflector():
+    """Decision A uses the raw view for QC. On constructed reflector scenes the raw-view QC never prefers
+    the mask grown into the reflector. The same scenes after the low-frequency filter fooled the QC in only
+    3 of 200 cases (2026-11-12), i.e. these scenes do NOT reproduce the low-freq failure seen on the demo
+    volumes; decision A rests on the demo check alone (see qc-refine-loop/tasks.md). The low-freq count is
+    returned for the record, not asserted."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+    import lowfreq_service as lf
+
+    fails = {"raw": 0, "lowfreq": 0}
+    n = 200
+    for i in range(n):
+        rng = np.random.default_rng(i)
+        f, amp, w = rng.uniform(6, 16), rng.uniform(0.5, 3.0), int(rng.integers(8, 17))
+        c0, center = int(rng.integers(4, COLS - w - 4)), int(rng.integers(60, 100))
+        target = np.zeros((ROWS, COLS))
+        target[:, c0:c0 + w] = amp * ricker(f, center)[:, None]
+        env, _ = qc.envelope(target)
+        m = env >= env.max() * 0.5
+        m[:, :c0] = False
+        m[:, c0 + w:] = False
+        r0 = int(np.flatnonzero(m.any(axis=1))[0])
+        refl = rng.uniform(3, 6) * amp * ricker(rng.uniform(25, 40), r0 - int(rng.integers(3, 11)) - 6)
+        s = (target + refl[:, None] + rng.normal(0, 0.05, (ROWS, COLS))).astype(np.float32)
+        renv, _ = qc.envelope(np.tile(refl[:, None], (1, 2)))
+        rtop = int(np.flatnonzero(renv[:, 0] >= renv[:, 0].max() * 0.5)[0])
+        up = m.copy()
+        up[rtop:r0, c0:c0 + w] = True
+        click = [(center, c0 + w // 2)]
+        for view, img in (("raw", s), ("lowfreq", lf.condition_slice(s, dt_us=2000))):
+            if qc.score_mask(img, up, click)["score"] >= qc.score_mask(img, m, click)["score"]:
+                fails[view] += 1
+    assert fails["raw"] == 0, fails
+
+
+@PBT
 @given(st.integers(0, 10_000), st.floats(0.0, 0.9))
 def test_score_in_unit_interval_for_random_masks(seed, density):
     rng = np.random.default_rng(seed)

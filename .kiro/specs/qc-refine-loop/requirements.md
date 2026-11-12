@@ -30,6 +30,8 @@ Terms:
 4. THE QC service SHALL declare every threshold as a module-level constant with a one-line reason, and SHALL return the constants used with every result. Constants SHALL be chosen from their definitions and the constructed-scene tests only, never by looking at the demo volumes' ground truth.
 5. IF the mask is empty, covers the whole slice, leaves no ring pixels, or no positive click lies inside the slice THEN the QC service SHALL return a composite score of 0 and a reason, not raise.
 6. THE composite score and its parts SHALL be deterministic for a given slice, mask and clicks.
+7. THE QC SHALL always be computed on the **raw (full-band)** slice, whichever view SAM segmented. (Decision A, 2026-11-12. Basis: the one-shot demo check in `tasks.md`, where the low-frequency view's QC never ranked the truth mask best (0/6). Constructed reflector scenes did **not** reproduce that failure — the low-freq QC was fooled in 3 of 200 — so the decision rests on the demo check alone. On the same scenes the raw-view QC was never fooled, 0/200.)
+8. THE QC SHALL report whether it is **reliable** on the slice: WHEN more than `GATE_MAX_TARGET_LIKE_FRAC` of all slice pixels are target-like THEN the clicked reference does not single out anything and the result SHALL be marked unreliable, with a reason.
 
 ### Requirement 2 — Fault continuity QC
 
@@ -54,6 +56,7 @@ Terms:
 5. THE loop SHALL return the **best** round, not the last round: a later round replaces the best round only if its composite score is higher by at least `MIN_GAIN`.
 6. THE loop SHALL embed the slice once and reuse the embedding for every round.
 7. THE driver SHALL NOT use ground truth to choose prompts, rounds or the best round.
+8. WHEN the first round's QC is unreliable (Requirement 1.8) THEN the driver SHALL NOT add corrective points; it SHALL return round 1 with stop reason `qc_unreliable`, and the UI SHALL say in plain English that the target is too weak for label-free QC on this slice.
 
 ### Requirement 4 — API and round log
 

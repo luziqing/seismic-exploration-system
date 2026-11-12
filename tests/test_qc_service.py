@@ -61,6 +61,15 @@ def test_leaving_out_target_raises_miss_and_lowers_score():
     assert big.any() and np.nonzero(big)[1].min() >= 20   # the largest miss lies in the left-out half of the target
 
 
+def test_gate_marks_a_target_at_noise_level_unreliable():
+    s_vis, m = _block_slice(amp=1.0, noise=0.05)
+    s_weak, _ = _block_slice(amp=0.05, noise=0.05)          # target amplitude equal to the noise
+    vis, weak = qc.score_mask(s_vis, m, SEED), qc.score_mask(s_weak, m, SEED)
+    assert vis["reliable"] is True and vis["unreliable_reason"] is None and vis["target_like_fraction"] < 0.5
+    assert weak["reliable"] is False and weak["target_like_fraction"] > qc.GATE_MAX_TARGET_LIKE_FRAC
+    assert "too weak" in weak["unreliable_reason"]
+
+
 def test_no_click_inside_slice_scores_zero_with_reason():
     s, m = _block_slice()
     for seeds in ([], None, [(-5, 3)], [(ROWS + 1, 0)]):

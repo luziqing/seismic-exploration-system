@@ -26,6 +26,7 @@ TARGET_BAND_DB = 6.0        # within a factor of 2 in envelope amplitude of the 
 GUARD_PX = 2                # skip the envelope halo right next to the mask edge
 RING_PX = 4                 # 4 native pixels (8 ms vertically, 4 traces laterally) of local background beyond the guard
 SCORE_RESOLUTION = 0.01     # score differences below this carry no meaning (largest property-test excess: 0.0089); = loop MIN_GAIN
+GATE_MAX_TARGET_LIKE_FRAC = 0.5   # if most of the slice looks like the clicked area, the click singles nothing out -> unreliable
 CONTINUITY_TOL_COLS = 1     # a fault may step one trace per sample row
 
 TARGET_TYPES = ("deep_target", "fault")
@@ -35,7 +36,8 @@ _CHESS = np.ones((3, 3), bool)
 
 def constants() -> dict:
     return {"SEED_HALF": SEED_HALF, "TARGET_BAND_DB": TARGET_BAND_DB, "GUARD_PX": GUARD_PX,
-            "RING_PX": RING_PX, "SCORE_RESOLUTION": SCORE_RESOLUTION, "CONTINUITY_TOL_COLS": CONTINUITY_TOL_COLS}
+            "RING_PX": RING_PX, "SCORE_RESOLUTION": SCORE_RESOLUTION,
+            "GATE_MAX_TARGET_LIKE_FRAC": GATE_MAX_TARGET_LIKE_FRAC, "CONTINUITY_TOL_COLS": CONTINUITY_TOL_COLS}
 
 
 def envelope(slice2d: np.ndarray, direction: str = "inline") -> tuple[np.ndarray, str]:
@@ -80,6 +82,7 @@ def target_like(env: np.ndarray, ref: float) -> np.ndarray:
 def _empty_result(reason: str, kind: str, target_type: str, shape) -> dict:
     z = np.zeros(shape, dtype=bool)
     return {"score": 0.0, "reason": reason, "target_type": target_type, "envelope": kind,
+            "reliable": False, "target_like_fraction": None, "unreliable_reason": reason,
             "contrast_db": None, "leak": None, "miss": None, "reference_envelope": None,
             "mask_pixels": 0, "ring_pixels": 0, "leak_map": z, "miss_map": z, "constants": constants()}
 
@@ -111,6 +114,8 @@ def score_mask(slice2d: np.ndarray, mask: np.ndarray, seeds, target_type: str = 
         return _empty_result("no positive click inside the slice", kind, target_type, m.shape)
 
     like = target_like(env, ref)
+    tl_frac = float(like.mean())
+    reliable = tl_frac <= GATE_MAX_TARGET_LIKE_FRAC
     leak_map = m & ~like
     miss_map = ring & like
     leak = float(leak_map.sum() / m.sum())
@@ -119,6 +124,10 @@ def score_mask(slice2d: np.ndarray, mask: np.ndarray, seeds, target_type: str = 
     contrast_db = float(20.0 * np.log10(m_in / m_ring)) if m_in > 0 and m_ring > 0 else None
 
     out = {"target_type": target_type, "envelope": kind, "reason": None,
+           "reliable": reliable, "target_like_fraction": tl_frac,
+           "unreliable_reason": None if reliable else (
+               f"{tl_frac:.0%} of the slice looks like the clicked area (limit {GATE_MAX_TARGET_LIKE_FRAC:.0%}): "
+               "the target is too weak for label-free QC on this slice"),
            "contrast_db": contrast_db, "leak": leak, "miss": miss, "reference_envelope": ref,
            "mask_pixels": int(m.sum()), "ring_pixels": int(ring.sum()),
            "median_env_mask": m_in, "median_env_ring": m_ring,

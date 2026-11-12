@@ -44,6 +44,21 @@ Spec updated first (Requirement 1, design "Reference (option C)"). Then:
 
 **Consequence for the loop and the demo (owner decision needed):** the QC is trustworthy where the target is visible by amplitude and its neighbours differ in amplitude — on the demo data, the clean volume's raw view. It is not trustworthy on the low-frequency view, which is exactly the view H1 recommends for the noisy volume. Choosing a different QC view or metric now would be a design change made after looking at demo truth, so it is not done here.
 
+### Decision A, 2026-11-12 (owner): QC on the raw view + reliability gate
+
+Spec first (Requirement 1.7, 1.8, 3.8; design "Envelope", "Reliability gate"). `GATE_MAX_TARGET_LIKE_FRAC = 0.5` was fixed from its definition ("most of the slice looks like the clicked area") before any check.
+
+- Constructed scenes: visible targets always pass the gate (200 examples); targets at or below the noise level always fail it (200 examples). 27 QC tests pass.
+- Honest note on the basis for "raw view": on constructed reflector scenes the low-frequency-view QC was fooled in only **3 of 200** cases (raw view: 0 of 200), so these scenes do not reproduce the failure seen on the demo volumes. Decision A therefore rests on the demo check above, and the docs say so.
+- One-shot gate check on the demo volumes (raw view, same simulated clicks, run once):
+
+  | Volume | Inlines 16 / 20 / 24 target-like fraction | Gate | Truth vs best mistake |
+  |---|---|---|---|
+  | clean | 0.195 / 0.208 / 0.203 | reliable | 0.838 vs 0.659, 0.887 vs 0.680, 0.861 vs 0.659 — truth best 3/3 |
+  | noisy | 0.594 / 0.611 / 0.610 | **unreliable** | (QC not used; loop would stop with `qc_unreliable`) |
+
+  The gate switches the loop off exactly on the slices where the QC was not trustworthy. On the demo, H3 runs on the clean volume, and the noisy volume shows the gate's message.
+
 ## Wave 2 — Loop driver (S5; Requirement 3) — due 11-20
 
 - [ ] `src/refine_service.py`: `run(...)` with injectable `segment_fn`; correction at the interior point of the larger of the largest leak / miss regions; stops `max_rounds`, `no_gain`, `nothing_to_fix`, `empty_mask`; best round = highest score, earliest on ties; embed once
