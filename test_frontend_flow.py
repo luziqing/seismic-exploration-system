@@ -1,142 +1,160 @@
 #!/usr/bin/env python
 """
-端到端测试：模拟前端完整流程
-1. 检查服务器状态（懒加载：model_loaded=false）
-2. 读取 Zarr 切片数据（inline/100）
-3. 模拟导航：读取下一张切片（inline/101）
-4. 验证数据形状一致性
+端到端测试：模拟前端完整流程（基于合成 NPY 卷，无需专有数据 / GPU）
+
+流程：
+ 1. 页面与静态资源可访问
+ 2. /api/status 懒加载（model_loaded=False）
+ 3. 列出 NPY 卷 -> 读取 meta
+ 4. 三个方向切片读取（inline / crossline / timeslice），校验二进制 float32 与 shape 头
+ 5. 导航：inline 0 -> 1 -> 2，shape 一致、内容不同
+ 6. 越界 / 负数索引 / 不存在的卷 的错误码
+ 7. 拾取会话：创建 -> 添加点 -> 读取 -> 撤销 -> 清空
+ 8. 校验：用真值 mask 对比自身，Dice/IoU 应为 1
+用法：先启动 python src/server.py，再运行本脚本（或 pytest）。
 """
+import os
 import sys
-import json
+
+import numpy as np
 import requests
-import time
 
-BASE_URL = "http://localhost:9339"
+BASE_URL = os.environ.get("SAM3_URL", "http://localhost:9339")
+VOLUME = os.environ.get("SAM3_TEST_VOLUME", "synthetic_deep_v1")
+T = 15
 
-def test_server_status():
-    print("=" * 60)
-    print("测试 1: 服务器状态")
-    r = requests.get(f"{BASE_URL}/api/status", timeout=5)
-    status = r.json()
-    print(f"  model_loaded: {status['model_loaded']} (预期: False，懒加载)")
-    print(f"  model_loading: {status.get('model_loading', False)}")
-    print(f"  weights_exists: {status['weights_exists']}")
-    print(f"  gpu_available: {status['gpu_available']}")
-    print(f"  gpu_name: {status.get('gpu_name', 'N/A')}")
-    assert status['model_loaded'] == False, "预期模型未加载（懒加载模式）"
-    assert status['weights_exists'] == True, "权重文件应存在"
-    print("  ✓ 服务器状态正常（懒加载生效）\n")
 
-def test_slice_read(zarr_name, direction, index):
-    print(f"测试: 读取 {zarr_name}/{direction}/{index}")
-    start = time.time()
-    r = requests.get(f"{BASE_URL}/api/zarr/{zarr_name}/slice/{direction}/{index}", timeout=10)
-    elapsed = time.time() - start
+def get(path, **kw):
+    return requests.get(f"{BASE_URL}{path}", timeout=T, **kw)
 
-    if r.status_code != 200:
-        print(f"  ✗ HTTP {r.status_code}: {r.text[:200]}")
-        return None
 
-    data = r.json()
-    shape = data.get('shape', [])
-    data_array = data.get('data', [])
+def read_slice(direction, index):
+    r = get(f"/api/npy/{VOLUME}/slice/{direction}/{index}")
+    assert r.status_code == 200, f"{direction}/{index} -> HTTP {r.status_code}: {r.text[:200]}"
+    rows, cols = int(r.headers["X-Rows"]), int(r.headers["X-Cols"])
+    arr = np.frombuffer(r.content, dtype=np.float32)
+    assert arr.size == rows * cols, f"字节数与 shape 不符: {arr.size} != {rows}x{cols}"
+    assert np.isfinite(arr).all(), "切片含 NaN/Inf"
+    return arr.reshape(rows, cols)
 
-    # 验证数据结构
-    rows, cols = shape if len(shape) == 2 else (0, 0)
-    print(f"  shape: {shape}, 耗时: {elapsed:.2f}s")
 
-    # 验证数据嵌套结构（前端需要 flattenSliceData 拍平）
-    if isinstance(data_array, list) and len(data_array) > 0:
-        first_row = data_array[0]
-        is_nested = isinstance(first_row, list)
-        print(f"  数据格式: {'嵌套 2D list (需前端 flatten)' if is_nested else '1D list'}")
-        if is_nested:
-            print(f"  第一行长度: {len(first_row)}, 预期: {cols}")
-            assert len(first_row) == cols, "行长度与 shape[1] 不匹配"
+def test_frontend_assets():
+    r = get("/")
+    assert r.status_code == 200 and "html" in r.headers["content-type"]
+    for js in ("app.js", "canvas.js", "sam-client.js", "storage.js"):
+        assert get(f"/static/js/{js}").status_code == 200, js
+    assert get("/static/css/app.css").status_code == 200
 
-    print(f"  ✓ 切片数据正常\n")
-    return shape
 
-def test_navigation_flow():
-    print("=" * 60)
-    print("测试 2: 模拟前端导航流程（inline 100 → 101 → 102）")
-    zarr_name = "ST8511r92.zarr"
+def test_server_status_lazy():
+    s = get("/api/status").json()
+    print(f"  status: {s}")
+    assert s["model_loaded"] is False, "懒加载：启动时模型不应已加载"
 
-    # 模拟首次加载
-    print("\n[加载状态] → loading...")
-    shape1 = test_slice_read(zarr_name, "inline", 100)
-    print("[加载状态] → ready (缓存 1/20)")
 
-    # 模拟点击 "→" 按钮
-    time.sleep(0.5)
-    print("\n[用户点击 →] → loading...")
-    shape2 = test_slice_read(zarr_name, "inline", 101)
-    print("[加载状态] → ready (缓存 2/20)")
+def test_volume_listing_and_meta():
+    vols = get("/api/npy/list").json()["volumes"]
+    assert VOLUME in [v["name"] for v in vols]
+    meta = get(f"/api/npy/{VOLUME}/meta").json()
+    print(f"  meta keys: {sorted(meta)[:8]}")
+    assert meta
 
-    # 再次点击 "→"
-    time.sleep(0.5)
-    print("\n[用户点击 →] → loading...")
-    shape3 = test_slice_read(zarr_name, "inline", 102)
-    print("[加载状态] → ready (缓存 3/20)")
 
-    # 验证 shape 一致性
-    if shape1 and shape2 and shape3:
-        assert shape1 == shape2 == shape3, "不同 inline 的 shape 应一致"
-        print(f"  ✓ 三张切片 shape 一致: {shape1}\n")
+def test_three_directions():
+    vol = next(v for v in get("/api/npy/list").json()["volumes"] if v["name"] == VOLUME)
+    n_il, n_xl, n_t = vol["n_inlines"], vol["n_crosslines"], vol["n_samples"]
+    il = read_slice("inline", n_il // 2)
+    xl = read_slice("crossline", n_xl // 2)
+    ts = read_slice("timeslice", n_t // 2)
+    print(f"  inline{il.shape} crossline{xl.shape} timeslice{ts.shape}")
+    assert il.ndim == xl.ndim == ts.ndim == 2
+    assert il.std() > 0, "inline 切片为常数"
 
-def test_cache_hit():
-    print("=" * 60)
-    print("测试 3: 缓存命中（重复读取 inline/100）")
-    zarr_name = "ST8511r92.zarr"
 
-    # 第一次（缓存未命中，耗时较长）
-    start1 = time.time()
-    requests.get(f"{BASE_URL}/api/zarr/{zarr_name}/slice/inline/100", timeout=10)
-    t1 = time.time() - start1
+def test_navigation():
+    a, b, c = (read_slice("inline", i) for i in (0, 1, 2))
+    assert a.shape == b.shape == c.shape
+    assert not np.array_equal(a, b) and not np.array_equal(b, c), "相邻切片不应完全相同"
+    # 同一切片重复读取应确定
+    assert np.array_equal(a, read_slice("inline", 0))
 
-    # 第二次（缓存命中，应该更快，但后端每次都读 Zarr，前端才有缓存）
-    start2 = time.time()
-    requests.get(f"{BASE_URL}/api/zarr/{zarr_name}/slice/inline/100", timeout=10)
-    t2 = time.time() - start2
 
-    print(f"  第一次: {t1:.3f}s")
-    print(f"  第二次: {t2:.3f}s")
-    print(f"  ✓ 后端无缓存（每次读 Zarr），前端 LRU 缓存生效\n")
+def test_error_codes():
+    n_il = next(v for v in get("/api/npy/list").json()["volumes"] if v["name"] == VOLUME)["n_inlines"]
+    assert get(f"/api/npy/{VOLUME}/slice/inline/{n_il + 1000}").status_code in (400, 500)
+    assert get(f"/api/npy/{VOLUME}/slice/inline/-1").status_code in (400, 404, 422)
+    assert get("/api/npy/no_such_volume/slice/inline/0").status_code == 404
+    assert get("/api/npy/no_such_volume/meta").status_code == 404
+
+
+def test_pick_session_flow():
+    sid = requests.post(f"{BASE_URL}/api/db/session", params={"slice_id": 999999}, timeout=T).json()["session_id"]
+    base = f"{BASE_URL}/api/db/session/{sid}/points"
+    requests.delete(base, timeout=T)  # 保证干净起点
+    pts = [
+        {"il": 1, "xl": 5, "depth": 100, "px_x": 10.0, "px_y": 20.0, "label": 1},
+        {"il": 1, "xl": 6, "depth": 110, "px_x": 12.0, "px_y": 22.0, "label": 0},
+    ]
+    assert requests.post(base, json={"session_id": sid, "points": pts}, timeout=T).json()["added"] == 2
+    assert len(requests.get(base, timeout=T).json()["points"]) == 2
+    assert requests.delete(f"{base}/last", timeout=T).json()["deleted"] is True
+    assert len(requests.get(base, timeout=T).json()["points"]) == 1
+    assert requests.delete(base, timeout=T).json()["cleared"] is True
+    assert requests.get(base, timeout=T).json()["points"] == []
+
+
+def test_validation_flow():
+    sid = requests.post(f"{BASE_URL}/api/db/session", params={"slice_id": 999999}, timeout=T).json()["session_id"]
+    mask = [[0, 1, 1], [0, 1, 0], [0, 0, 0]]
+    r = requests.post(
+        f"{BASE_URL}/api/db/session/{sid}/validation",
+        json={"predicted_mask": mask, "ground_truth_mask": mask},
+        timeout=T,
+    )
+    assert r.status_code == 200, r.text
+    out = r.json()
+    print(f"  validation keys: {sorted(out)}")
+    print(f"  metrics: {out['metrics']}")
+    for k in ("dice", "iou"):
+        assert k in out["metrics"], f"metrics 缺少 {k}"
+        assert abs(out["metrics"][k] - 1.0) < 1e-6, f"{k}={out['metrics'][k]}"
+    # 形状不一致应 400
+    bad = requests.post(
+        f"{BASE_URL}/api/db/session/{sid}/validation",
+        json={"predicted_mask": mask, "ground_truth_mask": [[1, 0]]},
+        timeout=T,
+    )
+    assert bad.status_code == 400
+
+
+TESTS = [
+    test_frontend_assets,
+    test_server_status_lazy,
+    test_volume_listing_and_meta,
+    test_three_directions,
+    test_navigation,
+    test_error_codes,
+    test_pick_session_flow,
+    test_validation_flow,
+]
+
 
 def main():
-    print("\n" + "=" * 60)
-    print("地震地质图像智能分割软件 - 端到端测试")
-    print("目标：验证懒加载 + SGY 浏览 + loading 状态 + 实时渲染")
-    print("=" * 60 + "\n")
+    failed = 0
+    for t in TESTS:
+        print(f"[{t.__name__}]")
+        try:
+            t()
+            print("  ✓ pass")
+        except requests.exceptions.ConnectionError:
+            print("✗ 服务器未运行，请先启动: python src/server.py")
+            return 2
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            print(f"  ✗ FAIL: {type(e).__name__}: {e}")
+    print(f"\n{len(TESTS) - failed}/{len(TESTS)} 通过")
+    return 1 if failed else 0
 
-    try:
-        test_server_status()
-        test_navigation_flow()
-        test_cache_hit()
-
-        print("=" * 60)
-        print("✓ 全部测试通过！")
-        print("=" * 60)
-        print("\n总结：")
-        print("1. 服务器秒启动（懒加载生效，model_loaded=False）")
-        print("2. SGY → Zarr 切片读取正常（shape=[301,227]）")
-        print("3. 导航流程（inline 100→101→102）数据一致")
-        print("4. 前端 loading 状态机制已验证（setStatus 调用正确）")
-        print("5. 前端 LRU 缓存（sliceCache 20 entries）已实现")
-        print("\n下一步：打开 http://localhost:9339 手动点击导航按钮验证 UI\n")
-        return 0
-
-    except requests.exceptions.ConnectionError:
-        print("✗ 服务器未运行，请先启动: python src/server.py")
-        return 1
-    except AssertionError as e:
-        print(f"✗ 断言失败: {e}")
-        return 1
-    except Exception as e:
-        print(f"✗ 测试异常: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
 
 if __name__ == "__main__":
     sys.exit(main())
