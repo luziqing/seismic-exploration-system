@@ -45,9 +45,9 @@ let currentSliceShape = null;
 let currentClip = 1.0;
 let seismicImageData = null;
 
-// 缩放因子: 1.0 = 原始比例, >1 放大, <1 缩小
-let scaleY = 1.0;  // 上下纵向缩放
-let scaleX = 1.0;  // 横向缩放
+// Zoom factors: 1.0 = original scale, >1 zoom in, <1 zoom out
+let scaleY = 1.0;  // vertical zoom
+let scaleX = 1.0;  // horizontal zoom
 
 let loopEnabled = true;
 let fps = 4;
@@ -116,6 +116,48 @@ function setStatus(type, msg) {
     statusText.textContent = msg;
 }
 
+// Plain-English error text for the status bar (scope S7 / E3)
+function errText(e) {
+    const m = (e && e.message) || String(e);
+    if (e instanceof TypeError && /fetch|network/i.test(m))
+        return `server not reachable at ${location.origin}. Start it with: python src/server.py`;
+    return m;
+}
+
+// Error from a non-OK fetch response; works when the body is not JSON (e.g. a proxy page)
+async function respError(resp) {
+    let msg = `HTTP ${resp.status}`;
+    try { const j = await resp.json(); if (j && j.detail) msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); }
+    catch (_) { /* not JSON */ }
+    return new Error(msg);
+}
+// SAM3 state badge (scope S7). samState is read by the SAM paths to show a CPU encoding notice.
+let samState = { weights: true, device: 'cuda' };
+function updateSamBadge(s) {
+    const el = document.getElementById('samBadge');
+    samState = { weights: !!s.weights_exists, device: s.sam_device || (s.gpu_available ? 'cuda' : 'cpu') };
+    if (!el) return;
+    if (!s.weights_exists) {
+        el.className = 'sam-badge missing';
+        el.textContent = 'SAM3: weights missing';
+        el.title = `Download sam3.pt from ${s.weights_source} (request access, Meta SAM License), ` +
+                   `place it at ${s.weights_path} and restart the server. See README "SAM3 weights".`;
+    } else if (samState.device === 'cpu') {
+        el.className = 'sam-badge cpu';
+        el.textContent = 'SAM3: CPU';
+        el.title = 'No GPU in use: each new slice takes about 15 s to encode.';
+    } else {
+        el.className = 'sam-badge gpu';
+        el.textContent = 'SAM3: GPU';
+        el.title = s.gpu_name || 'CUDA GPU';
+    }
+}
+
+// Status text while a slice is encoded for SAM
+function encodingStatus() {
+    return samState.device === 'cpu' ? 'Encoding slice on CPU (about 15 s)...' : 'Encoding slice for SAM...';
+}
+
 function updateModeButtons() {
     btnInclude.classList.toggle('active', pickMode === 'include');
     btnExclude.classList.toggle('active', pickMode === 'exclude');
@@ -146,10 +188,10 @@ async function loadDeviceList() {
 if (selDisplayMode) {
     selDisplayMode.onchange = e => {
         const newMode = e.target.value;
-        // TimeSlice 水平切片不支持 Wiggle 波形显示
+        // Wiggle display is not supported on time slices
         if (newMode === 'wv' && curDir === 'timeslice') {
             e.target.value = 'vd';
-            setStatus('ready', 'TimeSlice 不支持 Wiggle 模式, 已保持 Seismic Color');
+            setStatus('ready', 'Wiggle is not available for time slices; kept Seismic Color');
             return;
         }
         displayMode = newMode;
@@ -191,13 +233,13 @@ if (btnRunSAM) btnRunSAM.onclick = () => runSAMInference();
 if (btnExportMask) btnExportMask.onclick = () => exportMaskAsContour();
 if (btnValidate) btnValidate.onclick = () => validateSegmentation();
 
-// 增益/减益按钮
+// Gain up / gain down buttons
 const btnGainUp = document.getElementById('btnGainUp');
 const btnGainDown = document.getElementById('btnGainDown');
 if (btnGainUp) btnGainUp.onclick = () => adjustGain('up');
 if (btnGainDown) btnGainDown.onclick = () => adjustGain('down');
 
-// 缩放按钮
+// Zoom buttons
 const btnScaleYUp = document.getElementById('btnScaleYUp');
 const btnScaleYDown = document.getElementById('btnScaleYDown');
 const btnScaleXUp = document.getElementById('btnScaleXUp');
@@ -210,48 +252,48 @@ if (btnScaleXDown) btnScaleXDown.onclick = () => adjustScale('x', 'down');
 const btnFitWindow = document.getElementById('btnFitWindow');
 if (btnFitWindow) btnFitWindow.onclick = () => fitToWindow();
 
-// Save 按钮：手动保存拾取到 localStorage
+// Save button: save picks to localStorage
 if (btnSave) {
     btnSave.onclick = () => {
         const total = [...picksBySlice.values()].reduce((s, a) => s + a.length, 0);
-        if (total === 0) { setStatus('ready', '没有拾取点可保存'); return; }
+        if (total === 0) { setStatus('ready', 'No picks to save'); return; }
         saveToLocalStorage();
-        setStatus('ready', `💾 已保存 ${total} 个拾取点到浏览器本地`);
+        setStatus('ready', `Saved ${total} picks in this browser`);
     };
 }
 
-// Restore 按钮：从 localStorage 恢复拾取
+// Restore button: restore picks from localStorage
 if (btnRestore) {
     btnRestore.onclick = () => {
         const backup = checkForBackup();
         if (!backup) {
-            alert('没有找到本地备份的拾取数据。');
+            alert('No saved picks found in this browser.');
             return;
         }
         showRecoveryDialog(backup);
     };
 }
 
-// Reset 按钮：恢复到初始状态
+// Reset button: back to the initial state
 if (btnReset) {
     btnReset.onclick = () => {
-        if (!confirm('确定要重置所有状态吗？这将清除所有拾取点和缓存。')) return;
+        if (!confirm('Reset everything? This clears all picks and caches.')) return;
 
-        // 停止播放
+        // Stop playback
         if (playTimer) { clearInterval(playTimer); playTimer = null; }
 
-        // 清空拾取点和 mask
+        // Clear picks and mask
         picksBySlice.clear();
         logitsMap = null; logitsWidth = 0; logitsHeight = 0;
         embeddingId = null; embeddingImageSize = null;
         currentSessionId = null;
         clearBackup();
 
-        // 清空缓存
+        // Clear caches
         sliceCache.clear();
         embCache.clear();
 
-        // 重置状态变量
+        // Reset state variables
         curDir = 'inline';
         curIndex = 0;
         yAxisUnit = 'time';
@@ -259,11 +301,11 @@ if (btnReset) {
         loopEnabled = true;
         fps = 4;
         pickMode = 'exclude';
-        userGainFactor = 1.0;  // 重置增益偏移
+        userGainFactor = 1.0;  // reset gain offset
         scaleY = 1.0;
         scaleX = 1.0;
 
-        // 同步 UI 控件
+        // Sync UI controls
         if (dirSelect) dirSelect.value = 'inline';
         if (yUnitSelect) yUnitSelect.value = 'time';
         if (velocityInput) velocityInput.value = 3000;
@@ -271,7 +313,7 @@ if (btnReset) {
         if (loopCb) loopCb.checked = true;
         updateModeButtons();
 
-        // 如果有加载的数据，重新渲染第一张
+        // If data is loaded, re-render the first slice
         if (volInfo.name) {
             syncYAxis();
             updateAxes();
@@ -279,7 +321,7 @@ if (btnReset) {
             loadAndRenderSlice(curDir, curIndex);
         } else {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            setStatus('idle', '已重置');
+            setStatus('idle', 'Reset done');
         }
     };
 }
@@ -315,6 +357,16 @@ window.onresize = () => {
     if (typeof updateCompareView === 'function') updateCompareView();
 };
 
+// Keep the canvas backing store equal to its displayed box when the layout settles or changes
+if (typeof ResizeObserver === 'function') {
+    let _rsPending = false;
+    new ResizeObserver(() => {
+        if (_rsPending) return;
+        _rsPending = true;
+        requestAnimationFrame(() => { _rsPending = false; window.onresize(); });
+    }).observe(document.querySelector('.workspace'));
+}
+
 window.addEventListener('beforeunload', () => {
     const total = [...picksBySlice.values()].reduce((sum, arr) => sum + arr.length, 0);
     if (total > 0) saveToLocalStorage();
@@ -330,7 +382,7 @@ async function loadVolumeList() {
         const volumes = data.volumes || [];
         sel.innerHTML = '';
         if (volumes.length === 0) {
-            sel.innerHTML = '<option value="">(无预置数据体)</option>';
+            sel.innerHTML = '<option value="">(no preset volumes)</option>';
             return;
         }
         volumes.forEach(v => {
@@ -350,7 +402,7 @@ async function loadVolumeList() {
             }
         };
 
-        // 默认自动激活第一个数据体 (如 synthetic_deep_v1)
+        // Activate the first volume by default (e.g. synthetic_deep_v1)
         const defaultVol = volumes[0].name;
         sel.value = defaultVol;
         const metaResp = await fetch(`/api/npy/${defaultVol}/meta`);
@@ -374,22 +426,44 @@ window.onload = () => {
     fetch('/api/status')
         .then(r => r.json())
         .then(s => {
-            if (s.model_loaded) {
-                setStatus('ready', 'SAM3 ready (' + (s.gpu_name || 'CPU') + ')');
+            updateSamBadge(s);
+            if (!s.weights_exists) {
+                setStatus('error', `SAM3 weights missing: put sam3.pt at ${s.weights_path} (from ${s.weights_source}). ` +
+                                   'Browsing, Low-freq, Compare and Export work without it.');
+            } else if (s.model_loaded) {
+                setStatus('ready', 'SAM3 ready (' + (s.sam_device === 'cuda' ? s.gpu_name : 'CPU') + ')');
             } else if (s.model_loading) {
                 setStatus('loading', 'SAM3 loading...');
-            } else if (s.weights_exists) {
-                setStatus('ready', 'SGY browse ready | SAM lazy-load on first inference');
             } else {
-                setStatus('ready', 'SGY browse ready | weights missing');
+                setStatus('ready', 'Ready. SAM3 loads on the first SAM run (about 10-20 s).');
             }
             updateBackupStatus();
             const backup = checkForBackup();
             if (backup) showRecoveryDialog(backup);
         })
-        .catch(() => setStatus('error', 'Backend disconnected'));
+        .catch(() => setStatus('error', `Server not reachable at ${location.origin}. Start it with: python src/server.py`));
 };
 
 seismicImage.onload = () => {
     drawSeismic();
 };
+
+// "More" menu (scope S8): controls the demo does not need. The button toggles it;
+// a click outside or Escape closes it. The controls keep their ids and handlers.
+(function initMoreMenu() {
+    const wrap = document.getElementById('moreWrap');
+    const btn = document.getElementById('btnMore');
+    const menu = document.getElementById('moreMenu');
+    if (!wrap || !btn || !menu) return;
+    const setOpen = open => {
+        menu.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    btn.addEventListener('click', () => setOpen(!menu.classList.contains('open')));
+    document.addEventListener('mousedown', e => {
+        if (menu.classList.contains('open') && !wrap.contains(e.target)) setOpen(false);
+    });
+    window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && menu.classList.contains('open')) setOpen(false);
+    });
+})();

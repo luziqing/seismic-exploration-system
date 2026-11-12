@@ -1,12 +1,12 @@
 """
-SQLite 数据库模块 — 存储拾取点和 SAM 分割结果
+SQLite database module: stores pick points and SAM segmentation results
 
-表结构:
-  - sgy_files    : 上传的 SGY 文件记录
-  - slices       : 生成的切片图片记录
-  - pick_sessions: 拾取会话 (关联到某张切片)
-  - points       : 拾取的点位 (include/exclude)
-  - sam_results  : SAM 推理结果 (mask 路径, score)
+Tables:
+  - sgy_files    : uploaded SGY file records
+  - slices       : generated slice image records
+  - pick_sessions: pick sessions (linked to a slice)
+  - points       : picked points (include/exclude)
+  - sam_results  : SAM inference results (mask path, score)
 """
 
 import sqlite3
@@ -20,7 +20,7 @@ DB_PATH = DATA_DIR / "db" / "seismic.db"
 
 
 def get_conn() -> sqlite3.Connection:
-    """获取数据库连接 (启用 WAL 模式 + 外键)"""
+    """Get a database connection (WAL mode + foreign keys enabled)"""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
@@ -30,7 +30,7 @@ def get_conn() -> sqlite3.Connection:
 
 
 def init_db():
-    """初始化所有表"""
+    """Create all tables"""
     conn = get_conn()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS sgy_files (
@@ -52,14 +52,14 @@ def init_db():
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             sgy_id      INTEGER REFERENCES sgy_files(id),
             category    TEXT    NOT NULL,   -- 'inline' / 'crossline' / 'timeslice'
-            index_value INTEGER NOT NULL,   -- IL/XL 号或时间值
-            path        TEXT    NOT NULL,   -- 图片文件路径
+            index_value INTEGER NOT NULL,   -- IL/XL number or time value
+            path        TEXT    NOT NULL,   -- image file path
             created_at  REAL    DEFAULT (strftime('%s','now'))
         );
 
         CREATE TABLE IF NOT EXISTS pick_sessions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            slice_id    INTEGER,  -- nullable: Zarr直接渲染模式下无需关联slices表
+            slice_id    INTEGER,  -- nullable: direct Zarr rendering needs no slices row
             name        TEXT    DEFAULT '',
             created_at  REAL    DEFAULT (strftime('%s','now'))
         );
@@ -131,11 +131,11 @@ def init_db():
             mask_rle     TEXT              -- JSON run-length encoding of the native-grid mask
         );
     """)
-    # ── 迁移: 移除 pick_sessions.slice_id 的 FK 约束 (旧表有 REFERENCES slices(id))
+    # ── Migration: drop the FK constraint on pick_sessions.slice_id (old tables have REFERENCES slices(id))
     try:
         cols = conn.execute("PRAGMA table_info(pick_sessions)").fetchall()
         if cols:
-            # 检查 sql 是否包含旧的 FK 约束
+            # check whether the sql still contains the old FK constraint
             tbl = conn.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='pick_sessions'"
             ).fetchone()
@@ -157,7 +157,7 @@ def init_db():
     conn.close()
 
 
-# ── SGY 文件操作 ──────────────────────────────────────────────
+# ── SGY files ─────────────────────────────────────────────────
 
 def insert_sgy(filename: str, path: str, info: dict) -> int:
     conn = get_conn()
@@ -185,7 +185,7 @@ def get_latest_sgy() -> Optional[dict]:
     return dict(row) if row else None
 
 
-# ── 切片操作 ──────────────────────────────────────────────────
+# ── Slices ────────────────────────────────────────────────────
 
 def insert_slice(sgy_id: int, category: str, index_value: int, path: str) -> int:
     conn = get_conn()
@@ -209,7 +209,7 @@ def get_slices_by_category(category: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# ── 拾取会话 ──────────────────────────────────────────────────
+# ── Pick sessions ─────────────────────────────────────────────
 
 def create_session(slice_id: int, name: str = "") -> int:
     conn = get_conn()
@@ -224,7 +224,7 @@ def create_session(slice_id: int, name: str = "") -> int:
 
 
 def get_or_create_session(slice_id: int) -> int:
-    """获取某切片的最新会话, 没有则创建"""
+    """Get the latest session for a slice, creating one if none exists"""
     conn = get_conn()
     row = conn.execute(
         "SELECT id FROM pick_sessions WHERE slice_id = ? ORDER BY created_at DESC LIMIT 1",
@@ -238,7 +238,7 @@ def get_or_create_session(slice_id: int) -> int:
     return create_session(slice_id)
 
 
-# ── 点位操作 ──────────────────────────────────────────────────
+# ── Points ────────────────────────────────────────────────────
 
 def insert_point(session_id: int, il: float, xl: float, depth: float,
                  px_x: float = 0, px_y: float = 0, label: int = 1) -> int:
@@ -255,7 +255,7 @@ def insert_point(session_id: int, il: float, xl: float, depth: float,
 
 
 def insert_points_batch(session_id: int, points: list[dict]) -> int:
-    """批量插入点位, 返回插入数量"""
+    """Insert points in bulk; return the number inserted"""
     conn = get_conn()
     cur = conn.executemany(
         """INSERT INTO points (session_id, il, xl, depth, px_x, px_y, label)
@@ -279,7 +279,7 @@ def get_points_by_session(session_id: int) -> list[dict]:
 
 
 def delete_last_point(session_id: int) -> bool:
-    """删除会话中最后一个点"""
+    """Delete the last point in a session"""
     conn = get_conn()
     cur = conn.execute(
         "DELETE FROM points WHERE id = (SELECT MAX(id) FROM points WHERE session_id = ?)",
@@ -292,14 +292,14 @@ def delete_last_point(session_id: int) -> bool:
 
 
 def clear_points(session_id: int):
-    """清空会话中的所有点"""
+    """Delete all points in a session"""
     conn = get_conn()
     conn.execute("DELETE FROM points WHERE session_id = ?", (session_id,))
     conn.commit()
     conn.close()
 
 
-# ── SAM 结果 ──────────────────────────────────────────────────
+# ── SAM results ───────────────────────────────────────────────
 
 def insert_sam_result(session_id: int, mask_path: str, score: float,
                       mask_shape: tuple) -> int:

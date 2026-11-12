@@ -26,11 +26,11 @@
         .status-idle { background:#999; }
         @keyframes blink { 50% { opacity:0.4; } }
 
-        /* 切片浏览面板 */
+        /* Slice browser panel */
         #slicePanel { background:var(--ui-bg); border-top:2px solid var(--ui-border); padding:6px 10px; display:none; }
         #slicePanel.visible { display:block; }
 
-        /* 生成切片弹窗 */
+        /* Generate-slices modal */
         .modal-overlay {
             position:fixed; top:0; left:0; width:100%; height:100%;
             background:rgba(0,0,0,0.45); z-index:999;
@@ -111,3 +111,24 @@
 #refinePanel .refine-table td.ref, #refinePanel .refine-table th:last-child { color:#666; }
 #refinePanel .refine-stop { margin-top:4px; font-weight:bold; max-width:440px; white-space:normal; }
 #refinePanel .refine-hint { margin-top:2px; color:#666; max-width:440px; }
+/* Layout and toolbar declutter (scope S8): the page is a full-height column, so the slice
+   slider always sits above the fixed footer whatever the toolbar height */
+body { display:flex; flex-direction:column; height:100vh; box-sizing:border-box; padding-bottom:20px; }
+.toolbar { flex:0 0 auto; gap:6px; }
+.main-container { flex:1 1 auto; height:auto; min-height:0; }
+#slicePanel { flex:0 0 auto; }
+.tb-sep { color:var(--ui-border); }
+.tb-nowrap { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.tb-status { flex:1 1 200px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#moreWrap { position:relative; display:inline-block; margin-left:auto; }
+#moreMenu { display:none; position:absolute; top:100%; right:0; margin-top:3px; z-index:200; background:var(--ui-bg); border:1px solid var(--ui-border); box-shadow:2px 2px 8px rgba(0,0,0,.35); padding:6px 8px; width:max-content; max-width:calc(100vw - 20px); }
+#moreMenu.open { display:block; }
+#moreMenu .more-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:4px 0; border-bottom:1px solid #b8b4ac; }
+#moreMenu .more-row:last-child { border-bottom:none; }
+#moreMenu .more-label { min-width:56px; font-size:11px; font-weight:bold; color:#333; }
+#btnMore[aria-expanded="true"] { background:#ccc; }
+/* SAM3 state badge (scope S7): weights missing / CPU / GPU, always visible */
+.sam-badge { font-size:11px; padding:0 6px; border:1px solid #888; border-radius:8px; margin-right:6px; white-space:nowrap; background:#eee; }
+.sam-badge.gpu { background:#e6f4ea; border-color:#2e7d32; color:#1b5e20; }
+.sam-badge.cpu { background:#fff8e1; border-color:#f9a825; color:#7a5d00; }
+.sam-badge.missing { background:#fdecea; border-color:#c62828; color:#8e0000; cursor:help; }

@@ -2,7 +2,7 @@
 // spec qc-refine-loop Requirement 5). Loaded after sam-client.js and survey-map.js; uses their globals
 // (volInfo, curDir, curIndex, picksBySlice, logitsMap, setStatus, refreshSurveyFootprint).
 //
-// Defaults come from scripts/measure_refine.py (docs/MEASUREMENTS.md, 2026-11-13): SAM and the loop
+// Defaults come from scripts/measure_refine.py (docs/MEASUREMENTS.md, 2026-11-12): SAM and the loop
 // segment the RAW slice whatever view is displayed, and Auto-refine is on for NPY volumes.
 
 let refineRun = null;          // last response of POST /api/npy/{vol}/refine
@@ -36,15 +36,12 @@ async function runRefine(picks) {
         direction: curDir, index: curIndex, mode: REFINE_SAM_MODE, target_type: 'deep_target',
         points: picks.map(p => [p.nx, p.ny]), labels: picks.map(p => p.label), write_mask: true,
     };
-    setStatus('loading', 'Running SAM with QC refine (up to 3 rounds)...');
+    setStatus('loading', (samState.device === 'cpu' ? 'Encoding slice on CPU (about 15 s), then ' : '') + 'running SAM with QC refine (up to 3 rounds)...');
     const resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/refine`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
     });
-    if (!resp.ok) {
-        let msg = `HTTP ${resp.status}`;
-        try { msg = (await resp.json()).detail || msg; } catch (e) { /* not JSON */ }
-        throw new Error(msg);
-    }
+    if (!resp.ok) throw await respError(resp);
+
     refineRun = await resp.json();
     refineSliceKey = currentSliceKey();
     selectRefineRound(refineRun.best_round);

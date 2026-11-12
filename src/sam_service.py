@@ -1,8 +1,8 @@
 """
-SAM3 推理服务 — 模型加载、图像嵌入、点提示分割
+SAM3 inference service: model loading, image embedding, point-prompt segmentation
 
-使用 Ultralytics SAM 高层 API，兼容 SAM/SAM2/SAM3。
-懒加载: 启动时不加载模型，首次调用 embed_image/predict_mask 时自动加载。
+Uses the high-level Ultralytics SAM API (works with SAM/SAM2/SAM3).
+Lazy loading: the model is not loaded at startup but on the first embed_image/predict_mask call.
 """
 
 import logging
@@ -16,41 +16,41 @@ from PIL import Image
 
 logger = logging.getLogger("sam3-server")
 
-# ── 全局状态 ──────────────────────────────────────────────────
+# ── Global state ──────────────────────────────────────────────
 _model = None
-_model_loading = False       # 正在加载中（防止并发重复加载）
+_model_loading = False       # loading in progress (prevents concurrent duplicate loads)
 _model_path: str | None = None
 _selected_device = "auto"    # auto | cpu | cuda:0 | cuda:1 ...
-_EMBEDDING_MAX = 50          # 最大嵌入缓存数量
+_EMBEDDING_MAX = 50          # max number of cached embeddings
 _embeddings: dict = {}  # {embedding_id: {"path": str, "size": tuple}}
 
-# 图像编码器特征缓存 (GPU 张量, 每条约数 MB): 点提示只需过解码器, 不必重复编码图像。
-# 只保留最近 _FEATURE_MAX 条, 被淘汰者在 predict 时按需重新编码。
+# Image-encoder feature cache (GPU tensors, a few MB each): point prompts only need the decoder, so the image is not re-encoded.
+# Only the latest _FEATURE_MAX entries are kept; evicted ones are re-encoded on demand at predict time.
 _FEATURE_MAX = 8
 _features: "OrderedDict[str, object]" = OrderedDict()
-# predictor 内部状态 (features/dataset) 是共享可变的, 推理必须串行
+# Internal predictor state (features/dataset) is shared and mutable, so inference must be serialised
 _infer_lock = threading.RLock()
 
 
 def is_loaded() -> bool:
-    """模型是否已加载就绪"""
+    """Whether the model is loaded and ready"""
     return _model is not None and not _model_loading
 
 
 def is_loading() -> bool:
-    """模型是否正在加载中"""
+    """Whether the model is currently loading"""
     return _model_loading
 
 
 def set_weights_path(weights_path: str):
-    """启动时记录权重路径（不加载模型）"""
+    """Record the weights path at startup (does not load the model)"""
     global _model_path
     _model_path = weights_path
 
 
 def list_devices() -> list[dict]:
-    """列出可用于 SAM 推理的设备"""
-    devices = [{"id": "auto", "name": "Auto (GPU 优先)", "type": "auto"},
+    """List the devices available for SAM inference"""
+    devices = [{"id": "auto", "name": "Auto (GPU if available)", "type": "auto"},
                {"id": "cpu", "name": "CPU", "type": "cpu"}]
     if torch.cuda.is_available():
         for i in range(torch.cuda.device_count()):
@@ -72,23 +72,23 @@ def get_selected_device() -> str:
 
 def set_device(device_id: str) -> dict:
     """
-    选择 SAM 推理设备。仅允许在模型未加载时切换，避免运行中迁移模型。
+    Select the SAM inference device. Only allowed before the model is loaded, so a running model is never moved.
     """
     global _selected_device
     valid = {d["id"] for d in list_devices()}
     if device_id not in valid:
-        raise ValueError(f"无效设备: {device_id}")
+        raise ValueError(f"Invalid device: {device_id}")
     if _model is not None:
-        raise RuntimeError("SAM3 模型已加载，切换设备前请重启服务")
+        raise RuntimeError("SAM3 is already loaded; restart the server to switch device")
     _selected_device = device_id
-    logger.info("SAM3 推理设备已选择: %s", device_id)
+    logger.info("SAM3 inference device selected: %s", device_id)
     return {"selected_device": _selected_device, "devices": list_devices()}
 
 
 def ensure_loaded():
     """
-    懒加载入口 — 首次调用时加载模型，后续调用直接返回。
-    如果权重文件不存在或加载失败，抛出 RuntimeError。
+    Lazy-load entry point: loads the model on the first call, later calls return at once.
+    Raises RuntimeError if the weights file is missing or loading fails.
     """
     global _model, _model_loading
 
@@ -96,11 +96,11 @@ def ensure_loaded():
         return
 
     if _model_path is None:
-        raise RuntimeError("权重路径未配置，请先调用 set_weights_path()")
+        raise RuntimeError("SAM3 weights path is not configured (call set_weights_path())")
 
     wp = Path(_model_path)
     if not wp.exists():
-        raise RuntimeError(f"权重文件未找到: {wp}")
+        raise RuntimeError(f"SAM3 weights not found: {wp}. Download sam3.pt from https://huggingface.co/facebook/sam3 (request access first) and place it at data/weights/sam3.pt")
 
     _model_loading = True
     try:
@@ -110,45 +110,45 @@ def ensure_loaded():
 
 
 def load_model(weights_path: str):
-    """内部加载函数 — 读取权重文件、根据 _selected_device 选择 GPU/CPU"""
+    """Internal loader: reads the weights file and picks GPU/CPU from _selected_device"""
     global _model
 
-    logger.info("正在加载 SAM3 模型 (Ultralytics), 设备偏好: %s ...", _selected_device)
+    logger.info("Loading SAM3 model (Ultralytics), preferred device: %s ...", _selected_device)
     from ultralytics import SAM
 
     _model = SAM(weights_path)
 
-    # 根据 _selected_device 决定目标设备
+    # Pick the target device from _selected_device
     target_gpu = None
     if _selected_device == "cpu":
-        # 强制 CPU
-        logger.info("用户选择 CPU 模式")
+        # Force CPU
+        logger.info("CPU mode selected by user")
         _model.model = _model.model.float().cpu()
-        logger.info("SAM3 模型已加载到 CPU")
+        logger.info("SAM3 model loaded on CPU")
         return
     elif _selected_device.startswith("cuda:"):
         idx = int(_selected_device.split(":")[1])
         if torch.cuda.is_available() and idx < torch.cuda.device_count():
             target_gpu = idx
-    # "auto" 或未识别 → target_gpu = None → 下面自动选 cuda:0
+    # "auto" or unrecognised -> target_gpu = None -> cuda:0 is picked below
 
     if torch.cuda.is_available():
         gpu_idx = target_gpu if target_gpu is not None else 0
         gpu_total = torch.cuda.get_device_properties(gpu_idx).total_memory
         gpu_total_mb = gpu_total / (1024 * 1024)
-        logger.info("GPU %d 显存: %.0f MB", gpu_idx, gpu_total_mb)
+        logger.info("GPU %d memory: %.0f MB", gpu_idx, gpu_total_mb)
 
         try:
             with torch.cuda.device(gpu_idx):
                 _model.model = _model.model.half().cuda(gpu_idx)
             gpu_used = torch.cuda.memory_allocated(gpu_idx) / (1024 * 1024)
-            logger.info("SAM3 模型已加载到 GPU %d (fp16), 占用 %.0f MB / %.0f MB",
+            logger.info("SAM3 model loaded on GPU %d (fp16), using %.0f MB / %.0f MB",
                         gpu_idx, gpu_used, gpu_total_mb)
         except torch.cuda.OutOfMemoryError:
-            logger.warning("GPU %d 显存不足 (fp16), 回退到 CPU", gpu_idx)
+            logger.warning("GPU %d out of memory (fp16), falling back to CPU", gpu_idx)
             _model.model = _model.model.float().cpu()
     else:
-        logger.info("SAM3 模型加载完成 (CPU 模式, 无 GPU)")
+        logger.info("SAM3 model loaded (CPU mode, no GPU)")
 
 
 def get_device_info() -> dict:
@@ -158,21 +158,21 @@ def get_device_info() -> dict:
     }
 
 
-# ── 图像嵌入 ──────────────────────────────────────────────────
+# ── Image embedding ───────────────────────────────────────────
 
 def embed_image(image_path: str) -> dict:
-    """计算图像嵌入, 返回 {embedding_id, image_size}。首次调用时自动加载模型。"""
+    """Compute the image embedding; returns {embedding_id, image_size}. Loads the model on the first call."""
     import uuid
     import time
 
     t0 = time.perf_counter()
-    ensure_loaded()  # 懒加载：首次调用时才加载模型
+    ensure_loaded()  # lazy loading: the model is loaded on the first call
     t_load = time.perf_counter() - t0
 
     with Image.open(image_path) as im:
         img_size = im.size  # (w, h)
 
-    # 只做一次图像编码并缓存特征 (原先这里跑了一次无提示"全图分割"后丢弃结果)
+    # Encode the image once and cache the features (this used to run a prompt-free "segment everything" pass and discard the result)
     t1 = time.perf_counter()
     with _infer_lock:
         feats = _encode_image(image_path)
@@ -184,13 +184,13 @@ def embed_image(image_path: str) -> dict:
         "size": img_size,
     }
     _store_features(embedding_id, feats)
-    # LRU 淘汰：超过上限时删除最早的条目
+    # LRU eviction: drop the oldest entry when over the limit
     while len(_embeddings) > _EMBEDDING_MAX:
         oldest_key = next(iter(_embeddings))
         del _embeddings[oldest_key]
         _features.pop(oldest_key, None)
-        logger.debug("淘汰旧嵌入: %s", oldest_key)
-    logger.info("图像嵌入完成: id=%s, size=%s, 加载=%.2fs, 编码=%.2fs", embedding_id, img_size, t_load, t_infer)
+        logger.debug("Evicted old embedding: %s", oldest_key)
+    logger.info("Image embedded: id=%s, size=%s, load=%.2fs, encode=%.2fs", embedding_id, img_size, t_load, t_infer)
     return {"embedding_id": embedding_id, "image_size": list(img_size)}
 
 
@@ -199,7 +199,7 @@ def get_embedding(embedding_id: str) -> dict:
 
 
 def drop_embedding(embedding_id: str):
-    """释放某个嵌入 (含 GPU 特征缓存)。用于一次性使用的图像, 如跨切片传播。"""
+    """Release an embedding (including its GPU feature cache). Used for one-off images such as cross-slice propagation."""
     _embeddings.pop(embedding_id, None)
     _features.pop(embedding_id, None)
 
@@ -212,22 +212,22 @@ def _store_features(embedding_id: str, feats):
 
 
 def _encode_image(image_path: str):
-    """运行图像编码器并返回特征 (调用方需持有 _infer_lock)。"""
+    """Run the image encoder and return the features (caller must hold _infer_lock)."""
     pred = getattr(_model, "predictor", None)
     if pred is None:
-        # predictor 在首次 predict 时才创建: 用一次带提示的预测初始化 (不依赖无提示的全图分割)
+        # The predictor is created on the first predict: initialise it with one prompted prediction (no prompt-free full-image pass)
         with Image.open(image_path) as im:
             w, h = im.size
         _model.predict(source=image_path, points=[[w / 2, h / 2]], labels=[1], verbose=False)
         pred = _model.predictor
     try:
-        # Ultralytics 的 set_image 不带 inference_mode: 编码器激活会挂在特征的 autograd 图上
-        # (实测单次约 35 GB 显存), 这里显式关闭梯度。
+        # Ultralytics' set_image does not use inference_mode: encoder activations stay on the features' autograd graph
+        # (measured ~35 GB of GPU memory per call), so gradients are switched off explicitly here.
         with torch.inference_mode():
             pred.set_image(image_path)
         return pred.features
     finally:
-        pred.reset_image()  # 避免陈旧特征泄漏到其他图像的推理
+        pred.reset_image()  # keep stale features from leaking into inference on other images
 
 
 def _empty_mask_np(image_path: str, reason: str = "") -> dict:
@@ -244,10 +244,10 @@ def _empty_mask_response(image_path: str, reason: str = "") -> dict:
     return {"mask": out["mask"].tolist(), "mask_shape": [h, w], "scores": [0.0]}
 
 
-# ── 点提示分割 ────────────────────────────────────────────────
+# ── Point-prompt segmentation ────────────────────────────────
 
 def _run_prompted(embedding_id: str, image_path: str, points, labels):
-    """点提示推理, 复用缓存的编码器特征 (被淘汰则重新编码一次)。"""
+    """Point-prompt inference reusing the cached encoder features (re-encodes once if evicted)."""
     with _infer_lock:
         feats = _features.get(embedding_id)
         if feats is None and getattr(_model, "predictor", None) is not None:
@@ -270,7 +270,7 @@ def _run_prompted(embedding_id: str, image_path: str, points, labels):
 
 def predict_mask(embedding_id: str, points: list[list[float]],
                  labels: list[int]) -> dict:
-    """执行 SAM3 分割推理, 返回 {mask, mask_shape, scores}。首次调用时自动加载模型。"""
+    """Run SAM3 segmentation; returns {mask, mask_shape, scores}. Loads the model on the first call."""
     out = predict_mask_np(embedding_id, points, labels)
     return {
         "mask": out["mask"].tolist(),
@@ -281,13 +281,13 @@ def predict_mask(embedding_id: str, points: list[list[float]],
 
 def predict_mask_np(embedding_id: str, points: list[list[float]],
                     labels: list[int]) -> dict:
-    """同 predict_mask, 但 mask 以 float32 ndarray 返回 (跨切片传播用, 省去 JSON/列表转换)。"""
+    """Same as predict_mask, but returns the mask as a float32 ndarray (for cross-slice propagation, skips JSON/list conversion)."""
     import time
 
-    ensure_loaded()  # 懒加载：首次调用时才加载模型
+    ensure_loaded()  # lazy loading: the model is loaded on the first call
 
     if embedding_id not in _embeddings:
-        raise KeyError(f"无效的 embedding_id: {embedding_id}")
+        raise KeyError(f"Invalid embedding_id: {embedding_id}")
 
     info = _embeddings[embedding_id]
     image_path = info["path"]
@@ -299,7 +299,7 @@ def predict_mask_np(embedding_id: str, points: list[list[float]],
     if not results or results[0].masks is None:
         return _empty_mask_np(image_path, "results empty or masks is None")
 
-    # 提取 mask 数据
+    # Extract mask data
     masks_data = results[0].masks.data  # shape: [N, H, W]
     if masks_data is None:
         return _empty_mask_np(image_path, "masks.data is None")
@@ -308,15 +308,15 @@ def predict_mask_np(embedding_id: str, points: list[list[float]],
     if int(masks_data.shape[0]) == 0:
         return _empty_mask_np(image_path, "masks.data contains zero masks")
 
-    # 后处理: 提取 mask、降采样
+    # Post-processing: extract the mask and downsample
     t1 = time.perf_counter()
-    # 取第一个 mask (最高置信度)
+    # Take the first mask (highest confidence)
     if isinstance(masks_data, torch.Tensor):
         mask = masks_data[0].cpu().numpy().astype(np.float32)
     else:
         mask = np.array(masks_data[0], dtype=np.float32)
 
-    # score: 优先取 boxes.conf, 回退到 masks.iou, 最后用 mask 占比估算
+    # score: boxes.conf first, then masks.iou, finally an estimate from the mask area fraction
     score = 0.0
     boxes = getattr(results[0], "boxes", None)
     box_conf = getattr(boxes, "conf", None) if boxes is not None else None
@@ -330,15 +330,15 @@ def predict_mask_np(embedding_id: str, points: list[list[float]],
             iou_arr = iou.cpu().numpy() if isinstance(iou, torch.Tensor) else np.array(iou)
             if len(iou_arr) > 0:
                 score = float(iou_arr[0])
-    # 最终 fallback: 用 mask 非零面积占比作为置信度估计
+    # Final fallback: use the non-zero mask area fraction as the confidence estimate
     if score <= 0.0 and mask is not None:
         positive_ratio = float(np.mean(mask > 0.5))
         if positive_ratio > 0:
-            score = min(0.5, positive_ratio)  # 保守估计，上限 0.5
+            score = min(0.5, positive_ratio)  # conservative estimate, capped at 0.5
 
     h, w = mask.shape
 
-    # 降采样以减少传输数据量 (1024 保留更多细节, BICUBIC 更锐利)
+    # Downsample to cut transfer size (1024 keeps more detail, BICUBIC is sharper)
     max_dim = 1024
     if max(h, w) > max_dim:
         scale = max_dim / max(h, w)
@@ -348,7 +348,7 @@ def predict_mask_np(embedding_id: str, points: list[list[float]],
         mask = np.array(img_pil).astype(np.float32) / 255.0
     t_post = time.perf_counter() - t1
 
-    logger.info("推理完成: points=%d, mask_shape=%s, score=%.3f, 推理=%.2fs, 后处理=%.2fs",
+    logger.info("Inference done: points=%d, mask_shape=%s, score=%.3f, infer=%.2fs, postprocess=%.2fs",
                 len(points), mask.shape, score, t_infer, t_post)
 
     return {"mask": mask, "scores": [score]}

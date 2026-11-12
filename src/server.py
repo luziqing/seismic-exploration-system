@@ -1,12 +1,12 @@
 """
-SamForGeophysics — FastAPI 主入口
+SamForGeophysics: FastAPI main entry point
 
-启动方式:
+Start with:
     pip install -r requirements.txt
     python src/server.py
 
-访问: http://localhost:9339
-API 文档: http://localhost:9339/docs
+Open: http://localhost:9339
+API docs: http://localhost:9339/docs
 """
 
 import os
@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import numpy as np
 
-# ── 项目路径 ──────────────────────────────────────────────────
+# ── Project paths ─────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -42,7 +42,7 @@ for d in [UPLOAD_DIR, SGY_DIR, DATA_DIR / "weights", DATA_DIR / "db",
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sam3-server")
 
-# ── 导入业务模块 ──────────────────────────────────────────────
+# ── Import service modules ────────────────────────────────────
 import sam_service
 import sgy_service
 import npy_service
@@ -56,14 +56,14 @@ import vds_service
 import database
 import llm_service
 
-# 初始化数据库
+# Initialise the database
 database.init_db()
 
-# ── FastAPI 应用 ──────────────────────────────────────────────
+# ── FastAPI app ───────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app):
-    """启动时配置 SAM3 路径（不加载模型，首次推理时懒加载）"""
+    """At startup, configure the SAM3 path (the model is not loaded; it lazy-loads on first inference)"""
     sam_service.set_weights_path(str(WEIGHTS_PATH))
     yield
 
@@ -76,14 +76,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 静态文件（只暴露明确的资源目录，绝不挂载仓库根目录）
+# Static files (only explicit asset directories are exposed, never the repo root)
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-# 前端静态资源 (CSS/JS)
+# Frontend static assets (CSS/JS)
 _static_frontend = SRC_DIR / "static"
 if _static_frontend.is_dir():
     app.mount("/static", StaticFiles(directory=str(_static_frontend)), name="static")
 
-# ── 数据模型 ──────────────────────────────────────────────────
+# ── Data models ───────────────────────────────────────────────
 
 class PredictRequest(BaseModel):
     embedding_id: str
@@ -126,13 +126,13 @@ class LLMChatRequest(BaseModel):
     messages: list[dict]  # [{"role": "user"/"assistant"/"system", "content": "..."}]
 
 class LLMAnalyzeRequest(BaseModel):
-    image_base64: str          # 画布截图 base64 (不含 data: 前缀)
-    context: dict = {}         # 切片元数据、拾取点统计、SAM3 结果等
+    image_base64: str          # canvas screenshot base64 (without the data: prefix)
+    context: dict = {}         # slice metadata, pick point counts, SAM3 results, etc.
 
 class VdsUploadRequest(BaseModel):
     filename: str
-    connection_string: str = ""  # 云端 VDS 凭证 (可选)
-    convert_to_zarr: bool = False  # 是否同时转换为 Zarr
+    connection_string: str = ""  # cloud VDS credentials (optional)
+    convert_to_zarr: bool = False  # also convert to Zarr
 
 class VdsSliceRequest(BaseModel):
     inline_indices: list[int] = []
@@ -142,20 +142,20 @@ class VdsSliceRequest(BaseModel):
     channel: int = 0
 
 
-# ── 启动时配置 SAM3 路径（不加载模型，首次推理时懒加载）────────────
-# 已迁移到 lifespan 上下文管理器，见上方 lifespan()
+# ── Configure the SAM3 path at startup (no model load; lazy-loads on first inference) ──
+# Moved to the lifespan context manager, see lifespan() above
 
 
 # ══════════════════════════════════════════════════════════════
-# 页面 & 静态文件
+# Page & static files
 # ══════════════════════════════════════════════════════════════
 
 @app.get("/")
 async def serve_frontend():
-    """服务前端页面 index.html"""
+    """Serve the frontend page index.html"""
     index_path = BASE_DIR / "index.html"
     if not index_path.exists():
-        raise HTTPException(404, f"前端文件未找到: {index_path}")
+        raise HTTPException(404, f"Frontend file not found: {index_path}")
     return FileResponse(str(index_path), media_type="text/html; charset=utf-8")
 
 
@@ -169,7 +169,7 @@ async def embed_image(file: UploadFile = File(...)):
     save_path = UPLOAD_DIR / f"{uuid.uuid4().hex}{ext}"
     try:
         save_path.write_bytes(await file.read())
-        # to_thread: 模型懒加载可能阻塞几秒，不卡事件循环
+        # to_thread: lazy model loading can block for seconds; keep the event loop free
         return await asyncio.to_thread(sam_service.embed_image, str(save_path))
     except RuntimeError as e:
         raise HTTPException(503, str(e))
@@ -180,7 +180,7 @@ async def embed_image(file: UploadFile = File(...)):
 @app.post("/api/predict")
 async def predict_mask(req: PredictRequest):
     try:
-        # to_thread: 模型懒加载或推理可能阻塞，不卡事件循环
+        # to_thread: lazy loading or inference can block; keep the event loop free
         return await asyncio.to_thread(
             sam_service.predict_mask, req.embedding_id, req.points, req.labels
         )
@@ -202,6 +202,9 @@ async def model_status():
         "weights_exists": WEIGHTS_PATH.exists(),
         "gpu_available": info["gpu_available"],
         "gpu_name": info["gpu_name"],
+        "sam_device": "cuda" if info["gpu_available"] and sam_service.get_selected_device() != "cpu" else "cpu",
+        "weights_path": "data/weights/sam3.pt",
+        "weights_source": "https://huggingface.co/facebook/sam3",
         "sgy_loaded": sgy["sgy_path"] is not None,
         "sgy_filename": sgy.get("sgy_filename"),
         "zarr_path": sgy.get("zarr_path"),
@@ -211,7 +214,7 @@ async def model_status():
 
 @app.get("/api/devices")
 async def list_devices():
-    """列出可用推理设备 (CPU / GPU)"""
+    """List available inference devices (CPU / GPU)"""
     return {
         "devices": sam_service.list_devices(),
         "selected": sam_service.get_selected_device(),
@@ -221,7 +224,7 @@ async def list_devices():
 
 @app.post("/api/device")
 async def set_device(device_id: str):
-    """切换推理设备 (仅模型未加载时可用)"""
+    """Switch inference device (only before the model is loaded)"""
     try:
         return sam_service.set_device(device_id)
     except ValueError as e:
@@ -241,14 +244,14 @@ async def upload_sgy(file: UploadFile = File(...)):
     try:
         save_path.write_bytes(await file.read())
     except Exception as e:
-        raise HTTPException(500, f"文件保存失败: {e}")
+        raise HTTPException(500, f"Failed to save file: {e}")
 
     try:
         info = sgy_service.upload_and_convert(str(save_path), filename)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
-    # 写入数据库
+    # Write to the database
     db_id = database.insert_sgy(filename, str(save_path), {
         "il_min": info["il_range"][0], "il_max": info["il_range"][1],
         "xl_min": info["xl_range"][0], "xl_max": info["xl_range"][1],
@@ -299,53 +302,53 @@ async def generate_slices(req: SliceRequest):
 
 
 # ══════════════════════════════════════════════════════════════
-# 数据库 API — 拾取点 & SAM 结果
+# Database API: pick points & SAM results
 # ══════════════════════════════════════════════════════════════
 
 @app.post("/api/db/session")
 async def create_session(slice_id: int = 0):
-    """创建或获取拾取会话"""
+    """Create or get a pick session"""
     sid = database.get_or_create_session(slice_id)
     return {"session_id": sid}
 
 
 @app.get("/api/db/session/{session_id}/points")
 async def get_points(session_id: int):
-    """获取会话中的所有拾取点"""
+    """Get all pick points in a session"""
     return {"points": database.get_points_by_session(session_id)}
 
 
 @app.post("/api/db/session/{session_id}/points")
 async def add_points(session_id: int, req: PointsBatchRequest):
-    """批量添加拾取点"""
+    """Add pick points in bulk"""
     count = database.insert_points_batch(session_id, req.points)
     return {"added": count}
 
 
 @app.delete("/api/db/session/{session_id}/points/last")
 async def delete_last_point(session_id: int):
-    """撤销最后一个拾取点"""
+    """Undo the last pick point"""
     ok = database.delete_last_point(session_id)
     return {"deleted": ok}
 
 
 @app.delete("/api/db/session/{session_id}/points")
 async def clear_all_points(session_id: int):
-    """清空会话中所有拾取点"""
+    """Clear all pick points in a session"""
     database.clear_points(session_id)
     return {"cleared": True}
 
 
 @app.get("/api/db/session/{session_id}/sam_result")
 async def get_sam_result(session_id: int):
-    """获取会话中最近的 SAM 推理结果"""
+    """Get the latest SAM result in a session"""
     result = database.get_latest_sam_result(session_id)
     return result or {"result": None}
 
 
 @app.post("/api/db/session/{session_id}/sam_result")
 async def save_sam_result(session_id: int, req: SamResultRequest):
-    """保存 SAM 推理结果"""
+    """Save a SAM result"""
     rid = database.insert_sam_result(session_id, req.mask_path, req.score, tuple(req.mask_shape))
     return {"result_id": rid}
 
@@ -386,83 +389,83 @@ async def list_validations(session_id: int):
 
 
 # ══════════════════════════════════════════════════════════════
-# Zarr API — 卷数据存储管理
+# Zarr API: volume storage management
 # ══════════════════════════════════════════════════════════════
 
 @app.get("/api/zarr/list")
 async def list_zarr():
-    """列出所有已转换的 Zarr 卷"""
+    """List all converted Zarr volumes"""
     return {"volumes": zarr_service.list_zarr_volumes()}
 
 
 @app.get("/api/zarr/{zarr_name}/meta")
 async def zarr_metadata(zarr_name: str):
-    """获取 Zarr 卷元数据"""
+    """Get Zarr volume metadata"""
     zarr_path = DATA_DIR / "zarr" / zarr_name
     if not zarr_path.exists():
-        raise HTTPException(404, f"Zarr 卷不存在: {zarr_name}")
+        raise HTTPException(404, f"Zarr volume not found: {zarr_name}")
     return zarr_service.get_zarr_metadata(str(zarr_path))
 
 
 @app.get("/api/zarr/{zarr_name}/slice/inline/{il_index}")
 async def zarr_read_inline(zarr_name: str, il_index: int):
-    """从 Zarr 读取 Inline 切片数据 (numpy -> list)"""
+    """Read an inline slice from Zarr (numpy -> list)"""
     if il_index < 0:
-        raise HTTPException(400, f"索引不能为负数: {il_index}")
+        raise HTTPException(400, f"Index must not be negative: {il_index}")
     zarr_path = DATA_DIR / "zarr" / zarr_name
     if not zarr_path.exists():
-        raise HTTPException(404, f"Zarr 卷不存在: {zarr_name}")
+        raise HTTPException(404, f"Zarr volume not found: {zarr_name}")
     try:
         data = zarr_service.read_inline(str(zarr_path), il_index)
         return {"shape": list(data.shape), "data": data.tolist()}
     except (IndexError, KeyError) as e:
-        raise HTTPException(400, f"索引越界: {e}")
+        raise HTTPException(400, f"Index out of range: {e}")
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 @app.get("/api/zarr/{zarr_name}/slice/crossline/{xl_index}")
 async def zarr_read_crossline(zarr_name: str, xl_index: int):
-    """从 Zarr 读取 Crossline 切片数据"""
+    """Read a crossline slice from Zarr"""
     if xl_index < 0:
-        raise HTTPException(400, f"索引不能为负数: {xl_index}")
+        raise HTTPException(400, f"Index must not be negative: {xl_index}")
     zarr_path = DATA_DIR / "zarr" / zarr_name
     if not zarr_path.exists():
-        raise HTTPException(404, f"Zarr 卷不存在: {zarr_name}")
+        raise HTTPException(404, f"Zarr volume not found: {zarr_name}")
     try:
         data = zarr_service.read_crossline(str(zarr_path), xl_index)
         return {"shape": list(data.shape), "data": data.tolist()}
     except (IndexError, KeyError) as e:
-        raise HTTPException(400, f"索引越界: {e}")
+        raise HTTPException(400, f"Index out of range: {e}")
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 @app.get("/api/zarr/{zarr_name}/slice/timeslice/{sample_index}")
 async def zarr_read_timeslice(zarr_name: str, sample_index: int):
-    """从 Zarr 读取 TimeSlice 切片数据"""
+    """Read a time slice from Zarr"""
     if sample_index < 0:
-        raise HTTPException(400, f"索引不能为负数: {sample_index}")
+        raise HTTPException(400, f"Index must not be negative: {sample_index}")
     zarr_path = DATA_DIR / "zarr" / zarr_name
     if not zarr_path.exists():
-        raise HTTPException(404, f"Zarr 卷不存在: {zarr_name}")
+        raise HTTPException(404, f"Zarr volume not found: {zarr_name}")
     try:
         data = zarr_service.read_timeslice(str(zarr_path), sample_index)
         return {"shape": list(data.shape), "data": data.tolist()}
     except (IndexError, KeyError) as e:
-        raise HTTPException(400, f"索引越界: {e}")
+        raise HTTPException(400, f"Index out of range: {e}")
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 # ══════════════════════════════════════════════════════════════
-# NumPy API — memmap 二进制切片 (替代 Zarr, 更快更简单)
+# NumPy API: binary memmap slices (replaces Zarr; faster and simpler)
 # ══════════════════════════════════════════════════════════════
 
 from fastapi.responses import Response
 
 def _npy_binary_response(data: np.ndarray) -> Response:
-    """将 numpy 数组包装为二进制 float32 响应, 附带 shape 头"""
+    """Wrap a numpy array as a binary float32 response with a shape header"""
     return Response(
         content=data.astype(np.float32).tobytes(),
         media_type="application/octet-stream",
@@ -509,16 +512,16 @@ async def npy_embed_slice(vol_name: str, req: NpySliceEmbedRequest):
 
 @app.get("/api/npy/list")
 async def list_npy():
-    """列出所有 NumPy 卷"""
+    """List all NumPy volumes"""
     return {"volumes": npy_service.list_volumes()}
 
 
 @app.get("/api/npy/{vol_name}/meta")
 async def npy_metadata(vol_name: str):
-    """获取 NumPy 卷元数据"""
+    """Get NumPy volume metadata"""
     npy_dir = DATA_DIR / "npy" / vol_name
     if not npy_dir.exists():
-        raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
+        raise HTTPException(404, f"NumPy volume not found: {vol_name}")
     return npy_service.get_metadata(str(npy_dir))
 
 
@@ -555,10 +558,10 @@ def _npy_slice_response(vol_name: str, direction: str, index: int, mode: str) ->
     if mode not in lowfreq_service.SLICE_MODES:
         raise HTTPException(400, f"Unknown mode: {mode!r} (expected one of {', '.join(lowfreq_service.SLICE_MODES)})")
     if index < 0:
-        raise HTTPException(400, f"索引不能为负数: {index}")
+        raise HTTPException(400, f"Index must not be negative: {index}")
     npy_dir = DATA_DIR / "npy" / vol_name
     if not npy_dir.exists():
-        raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
+        raise HTTPException(404, f"NumPy volume not found: {vol_name}")
     try:
         return _npy_binary_response(_npy_slice_array(npy_dir, direction, index, mode))
     except (IndexError, ValueError) as e:
@@ -569,29 +572,29 @@ def _npy_slice_response(vol_name: str, direction: str, index: int, mode: str) ->
 
 @app.get("/api/npy/{vol_name}/slice/inline/{il_index}")
 async def npy_read_inline(vol_name: str, il_index: int, mode: str = "raw"):
-    """读取 Inline 切片 (二进制 float32); mode=lowfreq 返回低频条件化结果, 原始体不变"""
+    """Read an inline slice (binary float32); mode=lowfreq returns the low-frequency view, the original volume is unchanged"""
     return _npy_slice_response(vol_name, "inline", il_index, mode)
 
 
 @app.get("/api/npy/{vol_name}/slice/crossline/{xl_index}")
 async def npy_read_crossline(vol_name: str, xl_index: int, mode: str = "raw"):
-    """读取 Crossline 切片 (二进制 float32); mode=lowfreq 同上"""
+    """Read a crossline slice (binary float32); mode=lowfreq as above"""
     return _npy_slice_response(vol_name, "crossline", xl_index, mode)
 
 
 @app.get("/api/npy/{vol_name}/slice/timeslice/{sample_index}")
 async def npy_read_timeslice(vol_name: str, sample_index: int, mode: str = "raw"):
-    """读取 TimeSlice 切片 (二进制 float32); mode=lowfreq 先沿时间轴滤波整道再取样点"""
+    """Read a time slice (binary float32); mode=lowfreq filters whole traces along time before taking the sample"""
     return _npy_slice_response(vol_name, "timeslice", sample_index, mode)
 
 # ══════════════════════════════════════════════════════════════
-# 三维体 mask API — SAM 切片 mask 回映射并写入体素 mask
+# 3-D volume mask API: map SAM slice masks back and write them into the voxel mask
 # ══════════════════════════════════════════════════════════════
 
 class SliceMaskRequest(BaseModel):
     direction: str                       # inline | crossline | timeslice
-    index: int                           # 切片序号 (0 基)
-    mask: list[list[float]]              # SAM 返回的 2D mask (任意尺寸, 覆盖整张切片图像)
+    index: int                           # slice index (0-based)
+    mask: list[list[float]]              # 2-D mask from SAM (any size, covering the whole slice image)
     mask_name: str = "sam_mask"
     threshold: float = 0.5
     mode: str = "replace"                # replace | union
@@ -603,13 +606,13 @@ def _npy_vol_dir(vol_name: str) -> Path:
     base = (DATA_DIR / "npy").resolve()
     p = (base / vol_name).resolve()
     if p.parent != base or not (p / "amplitude.npy").exists():
-        raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
+        raise HTTPException(404, f"NumPy volume not found: {vol_name}")
     return p
 
 
 @app.post("/api/npy/{vol_name}/mask")
 async def npy_write_slice_mask(vol_name: str, req: SliceMaskRequest):
-    """把一张切片的 2D mask 回映射到体网格并写入体 mask"""
+    """Map one slice's 2-D mask onto the volume grid and write it into the volume mask"""
     npy_dir = _npy_vol_dir(vol_name)
     try:
         return volume_mask_service.write_slice_mask(
@@ -622,18 +625,18 @@ async def npy_write_slice_mask(vol_name: str, req: SliceMaskRequest):
 
 
 class PropagateRequest(BaseModel):
-    direction: str                 # 种子切片方向, 也是传播方向
-    index: int                     # 种子切片序号 (0 基)
+    direction: str                 # seed slice direction, also the propagation direction
+    index: int                     # seed slice index (0-based)
     mask_name: str = "sam_mask"
-    max_il: int = 5                # IL 半宽 (inline 传播=步数上限; 其他方向=横向外扩上限)
-    max_xl: int = 5                # XL 半宽
-    max_vertical: int = 30         # 纵向(采样点)半宽
-    min_iou: float = 0.1           # 与上一张 IoU 低于此值则停止 (防漂移)
+    max_il: int = 5                # IL half-width (inline propagation = step limit; other directions = sideways growth limit)
+    max_xl: int = 5                # XL half-width
+    max_vertical: int = 30         # vertical (sample) half-width
+    min_iou: float = 0.1           # stop when IoU with the previous slice is below this (prevents drift)
 
 
 @app.post("/api/npy/{vol_name}/propagate")
 def npy_propagate(vol_name: str, req: PropagateRequest):
-    """以体 mask 中的种子切片为起点, 跨切片传播 SAM 分割 (范围受 max_il/max_xl/max_vertical 限制)"""
+    """Propagate SAM segmentation across slices from the seed slice in the volume mask (range limited by max_il/max_xl/max_vertical)"""
     npy_dir = _npy_vol_dir(vol_name)
     try:
         return propagation_service.propagate(
@@ -643,8 +646,8 @@ def npy_propagate(vol_name: str, req: PropagateRequest):
         raise HTTPException(404, str(e))
     except (IndexError, ValueError) as e:
         raise HTTPException(400, str(e))
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
+    except RuntimeError as e:   # SAM3 not available (weights missing, load failure): service unavailable, not a crash
+        raise HTTPException(503, str(e))
 
 
 @app.get("/api/npy/{vol_name}/masks")
@@ -654,7 +657,7 @@ async def npy_list_masks(vol_name: str):
 
 @app.get("/api/npy/{vol_name}/mask/{mask_name}/info")
 async def npy_mask_info(vol_name: str, mask_name: str):
-    """体 mask 信息: 逐切片来源、体素数、以 il/xl/采样 表示的包围盒与质心"""
+    """Volume mask info: per-slice sources, voxel count, bounding box and centroid in il/xl/sample"""
     npy_dir = _npy_vol_dir(vol_name)
     try:
         meta = npy_service.get_metadata(str(npy_dir))
@@ -679,14 +682,14 @@ async def npy_mask_footprint(vol_name: str, mask_name: str):
 
 @app.get("/api/npy/{vol_name}/mask/{mask_name}/slice/{direction}/{index}")
 async def npy_read_mask_slice(vol_name: str, mask_name: str, direction: str, index: int):
-    """读取体 mask 的某张切片 (二进制 float32 0/1, 朝向与振幅切片一致)"""
+    """Read one slice of the volume mask (binary float32 0/1, same orientation as amplitude slices)"""
     npy_dir = _npy_vol_dir(vol_name)
     try:
         vol = volume_mask_service.read_mask_volume(str(npy_dir), mask_name)
         if direction not in volume_mask_service.DIRECTIONS:
-            raise ValueError(f"未知方向: {direction}")
+            raise ValueError(f"Unknown direction: {direction}")
         if not (0 <= index < volume_mask_service.slice_max_index(direction, vol.shape)):
-            raise IndexError(f"索引 {index} 超出范围")
+            raise IndexError(f"Index {index} out of range")
         view = volume_mask_service._slice_view(vol, direction, index)
         return _npy_binary_response(np.array(view, dtype=np.float32))
     except FileNotFoundError as e:
@@ -790,16 +793,16 @@ def get_refine(run_id: int):
     return _refine_response(run)
 
 # ══════════════════════════════════════════════════════════════
-# VDS API — OpenVDS 卷数据 (本地 .vds 或 S3/Azure URL)
+# VDS API: OpenVDS volumes (local .vds or S3/Azure URL)
 # ══════════════════════════════════════════════════════════════
 
 @app.get("/api/vds/status")
 async def vds_status():
-    """检查 OpenVDS 是否可用 + 已注册的 VDS 卷数量"""
+    """Check whether OpenVDS is available, plus the number of registered VDS volumes"""
     if not vds_service.is_available():
         return {
             "available": False,
-            "message": "openvds 未安装。运行: pip install openvds",
+            "message": "openvds is not installed. Run: pip install openvds",
         }
     try:
         volumes = vds_service.list_vds_volumes()
@@ -810,34 +813,34 @@ async def vds_status():
 
 @app.get("/api/vds/list")
 async def list_vds():
-    """列出所有本地 VDS 卷"""
+    """List all local VDS volumes"""
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装")
+        raise HTTPException(503, "openvds is not installed")
     return {"volumes": vds_service.list_vds_volumes()}
 
 
 @app.post("/api/vds/upload")
 async def upload_vds(file: UploadFile = File(...), convert_to_zarr: bool = False):
     """
-    上传本地 .vds / .vdso 文件。
-    注意: OpenVDS 也支持 S3/Azure URL, 但需通过 connection_string 参数指定, 走 /api/vds/open 路由。
+    Upload a local .vds / .vdso file.
+    Note: OpenVDS also supports S3/Azure URLs, but those need the connection_string parameter and go through /api/vds/open.
     """
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装, pip install openvds")
+        raise HTTPException(503, "openvds is not installed; run: pip install openvds")
 
     filename = file.filename or "upload.vds"
     vds_path = DATA_DIR / "vds" / filename
     try:
         vds_path.write_bytes(await file.read())
     except Exception as e:
-        raise HTTPException(500, f"文件保存失败: {e}")
+        raise HTTPException(500, f"Failed to save file: {e}")
 
     try:
         meta = vds_service.get_vds_metadata(str(vds_path))
     except Exception as e:
-        raise HTTPException(400, f"无法打开 VDS: {e}")
+        raise HTTPException(400, f"Cannot open VDS: {e}")
 
-    # 写入数据库
+    # Write to the database
     db_id = database.insert_sgy(filename, str(vds_path), {
         "il_min": meta["il_range"][0], "il_max": meta["il_range"][1],
         "xl_min": meta["xl_range"][0], "xl_max": meta["xl_range"][1],
@@ -858,7 +861,7 @@ async def upload_vds(file: UploadFile = File(...), convert_to_zarr: bool = False
         "channels": meta["channels"],
     }
 
-    # 可选: 转换为 Zarr 以加速后续切片
+    # Optional: convert to Zarr to speed up later slicing
     if convert_to_zarr:
         try:
             zarr_result = vds_service.vds_to_zarr(str(vds_path))
@@ -873,21 +876,21 @@ async def upload_vds(file: UploadFile = File(...), convert_to_zarr: bool = False
 @app.post("/api/vds/open")
 async def open_remote_vds(req: dict):
     """
-    注册一个云端 VDS URL (S3 / Azure), 返回元数据。
-    不下载数据, 仅记录 URL。
+    Register a cloud VDS URL (S3 / Azure) and return its metadata.
+    No data is downloaded; only the URL is recorded.
     """
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装")
+        raise HTTPException(503, "openvds is not installed")
 
     url = req.get("url", "")
     connection_string = req.get("connection_string", "")
     if not url:
-        raise HTTPException(400, "url 不能为空")
+        raise HTTPException(400, "url must not be empty")
 
     try:
         meta = vds_service.get_vds_metadata(url, connection_string)
     except Exception as e:
-        raise HTTPException(400, f"无法打开远程 VDS: {e}")
+        raise HTTPException(400, f"Cannot open remote VDS: {e}")
 
     return {
         "url": url,
@@ -903,12 +906,12 @@ async def open_remote_vds(req: dict):
 
 @app.get("/api/vds/{vds_name}/meta")
 async def vds_metadata(vds_name: str):
-    """获取 VDS 文件的完整元数据"""
+    """Get the full metadata of a VDS file"""
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装")
+        raise HTTPException(503, "openvds is not installed")
     vds_path = DATA_DIR / "vds" / vds_name
     if not vds_path.exists():
-        raise HTTPException(404, f"VDS 文件不存在: {vds_name}")
+        raise HTTPException(404, f"VDS file not found: {vds_name}")
     try:
         return vds_service.get_vds_metadata(str(vds_path))
     except Exception as e:
@@ -917,12 +920,12 @@ async def vds_metadata(vds_name: str):
 
 @app.get("/api/vds/{vds_name}/slice/inline/{il_index}")
 async def vds_read_inline(vds_name: str, il_index: int, channel: int = 0):
-    """从 VDS 读取 Inline 切片数据 (numpy -> list)"""
+    """Read an inline slice from VDS (numpy -> list)"""
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装")
+        raise HTTPException(503, "openvds is not installed")
     vds_path = DATA_DIR / "vds" / vds_name
     if not vds_path.exists():
-        raise HTTPException(404, f"VDS 文件不存在: {vds_name}")
+        raise HTTPException(404, f"VDS file not found: {vds_name}")
     try:
         data = vds_service.read_inline(str(vds_path), il_index, channel=channel)
         return {"shape": list(data.shape), "data": data.tolist()}
@@ -932,12 +935,12 @@ async def vds_read_inline(vds_name: str, il_index: int, channel: int = 0):
 
 @app.get("/api/vds/{vds_name}/slice/crossline/{xl_index}")
 async def vds_read_crossline(vds_name: str, xl_index: int, channel: int = 0):
-    """从 VDS 读取 Crossline 切片数据"""
+    """Read a crossline slice from VDS"""
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装")
+        raise HTTPException(503, "openvds is not installed")
     vds_path = DATA_DIR / "vds" / vds_name
     if not vds_path.exists():
-        raise HTTPException(404, f"VDS 文件不存在: {vds_name}")
+        raise HTTPException(404, f"VDS file not found: {vds_name}")
     try:
         data = vds_service.read_crossline(str(vds_path), xl_index, channel=channel)
         return {"shape": list(data.shape), "data": data.tolist()}
@@ -947,12 +950,12 @@ async def vds_read_crossline(vds_name: str, xl_index: int, channel: int = 0):
 
 @app.get("/api/vds/{vds_name}/slice/timeslice/{sample_index}")
 async def vds_read_timeslice(vds_name: str, sample_index: int, channel: int = 0):
-    """从 VDS 读取时间切片"""
+    """Read a time slice from VDS"""
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装")
+        raise HTTPException(503, "openvds is not installed")
     vds_path = DATA_DIR / "vds" / vds_name
     if not vds_path.exists():
-        raise HTTPException(404, f"VDS 文件不存在: {vds_name}")
+        raise HTTPException(404, f"VDS file not found: {vds_name}")
     try:
         data = vds_service.read_timeslice(str(vds_path), sample_index, channel=channel)
         return {"shape": list(data.shape), "data": data.tolist()}
@@ -962,12 +965,12 @@ async def vds_read_timeslice(vds_name: str, sample_index: int, channel: int = 0)
 
 @app.post("/api/vds/{vds_name}/generate_slices")
 async def vds_generate_slices(vds_name: str, req: VdsSliceRequest):
-    """从 VDS 生成 Inline/XL/TimeSlice 图片 (类似 SGY generate_slices)"""
+    """Generate inline/crossline/time-slice images from VDS (like SGY generate_slices)"""
     if not vds_service.is_available():
-        raise HTTPException(503, "openvds 未安装")
+        raise HTTPException(503, "openvds is not installed")
     vds_path = DATA_DIR / "vds" / vds_name
     if not vds_path.exists():
-        raise HTTPException(404, f"VDS 文件不存在: {vds_name}")
+        raise HTTPException(404, f"VDS file not found: {vds_name}")
 
     try:
         meta = vds_service.get_vds_metadata(str(vds_path), req.connection_string)
@@ -989,7 +992,7 @@ async def vds_generate_slices(vds_name: str, req: VdsSliceRequest):
         idx = np.linspace(0, n_samp - 1, 7, dtype=int)[1:-1]
         req.timeslice_indices = [int(samples[i]) for i in idx]
 
-    # 复用 sgy_service 的渲染函数
+    # Reuse sgy_service's rendering functions
     generated = {"inline": [], "crossline": [], "timeslice": []}
 
     for il_val in req.inline_indices:
@@ -1008,7 +1011,7 @@ async def vds_generate_slices(vds_name: str, req: VdsSliceRequest):
             )
             generated["inline"].append(name)
         except Exception as e:
-            logger.warning("VDS Inline %d 失败: %s", il_val, e)
+            logger.warning("VDS Inline %d failed: %s", il_val, e)
 
     for xl_val in req.crossline_indices:
         name = f"XL_{xl_val:04d}.png"
@@ -1026,7 +1029,7 @@ async def vds_generate_slices(vds_name: str, req: VdsSliceRequest):
             )
             generated["crossline"].append(name)
         except Exception as e:
-            logger.warning("VDS Crossline %d 失败: %s", xl_val, e)
+            logger.warning("VDS Crossline %d failed: %s", xl_val, e)
 
     for ts_val in req.timeslice_indices:
         name = f"TS_{ts_val:04d}ms.png"
@@ -1044,7 +1047,7 @@ async def vds_generate_slices(vds_name: str, req: VdsSliceRequest):
             )
             generated["timeslice"].append(name)
         except Exception as e:
-            logger.warning("VDS TimeSlice %d 失败: %s", ts_val, e)
+            logger.warning("VDS TimeSlice %d failed: %s", ts_val, e)
 
     total = sum(len(v) for v in generated.values())
     return {"generated": total, "slices": generated, "source": "vds"}
@@ -1056,19 +1059,19 @@ async def vds_generate_slices(vds_name: str, req: VdsSliceRequest):
 
 @app.get("/api/llm/providers")
 async def list_llm_providers():
-    """列出可用 LLM 提供商及默认配置"""
+    """List available LLM providers and default config"""
     return {"providers": llm_service.list_providers()}
 
 
 @app.get("/api/llm/config")
 async def get_llm_config():
-    """获取当前 LLM 配置 (API key 脱敏)"""
+    """Get the current LLM config (API key masked)"""
     return llm_service.get_config()
 
 
 @app.post("/api/llm/config")
 async def update_llm_config(config: LLMConfigRequest):
-    """更新 LLM 配置并保存到 data/llm_config.json"""
+    """Update the LLM config and save it to data/llm_config.json"""
     try:
         return llm_service.update_config(config.model_dump())
     except Exception as e:
@@ -1077,7 +1080,7 @@ async def update_llm_config(config: LLMConfigRequest):
 
 @app.post("/api/llm/chat")
 async def llm_chat(req: LLMChatRequest):
-    """SSE 流式聊天端点"""
+    """SSE streaming chat endpoint"""
     async def event_stream():
         try:
             async for token in llm_service.chat(req.messages, stream=True):
@@ -1087,7 +1090,7 @@ async def llm_chat(req: LLMChatRequest):
             yield f"data: {json_mod.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error("LLM chat error: %s", e)
-            yield f"data: {json_mod.dumps({'error': f'对话失败: {e}'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json_mod.dumps({'error': f'Chat failed: {e}'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -1102,7 +1105,7 @@ async def llm_chat(req: LLMChatRequest):
 
 @app.post("/api/llm/analyze")
 async def llm_analyze(req: LLMAnalyzeRequest):
-    """VLM 地震切片智能解读 (SSE 流式)"""
+    """VLM interpretation of a seismic slice (SSE streaming)"""
     async def event_stream():
         try:
             async for token in llm_service.analyze_image(req.image_base64, req.context):
@@ -1112,7 +1115,7 @@ async def llm_analyze(req: LLMAnalyzeRequest):
             yield f"data: {json_mod.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error("LLM analyze error: %s", e)
-            yield f"data: {json_mod.dumps({'error': f'分析失败: {e}'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json_mod.dumps({'error': f'Analysis failed: {e}'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -1126,7 +1129,7 @@ async def llm_analyze(req: LLMAnalyzeRequest):
 
 
 # ══════════════════════════════════════════════════════════════
-# 启动入口
+# Entry point
 # ══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
@@ -1134,5 +1137,5 @@ if __name__ == "__main__":
 
     host = os.environ.get("SAM3_HOST", "0.0.0.0")
     port = int(os.environ.get("SAM3_PORT", "9339"))
-    logger.info("启动 SAM3 地震分割服务器: http://%s:%d", host, port)
+    logger.info("Starting SAM3 seismic segmentation server: http://%s:%d", host, port)
     uvicorn.run(app, host=host, port=port)

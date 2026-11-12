@@ -11,11 +11,11 @@ function estimateClip(data, sampleSize = 5000) {
 
 let _fpsFrames = 0, _fpsLast = 0, _fpsValue = 0;
 
-// 增益/减益控制: clip 越小 → 波形越大(增益), clip 越大 → 波形越小(减益)
-const GAIN_STEP = 0.7;  // 每次增益/减益倍率
-const SCALE_STEP = 1.2; // 每次缩放倍率
+// Gain control: smaller clip -> larger amplitudes (gain up), larger clip -> smaller (gain down)
+const GAIN_STEP = 0.7;  // gain factor per step
+const SCALE_STEP = 1.2; // zoom factor per step
 
-// 用户增益偏移倍率: 1.0 = 无偏移, <1 = 已增益, >1 = 已减益
+// User gain offset: 1.0 = none, <1 = gained up, >1 = gained down
 let userGainFactor = 1.0;
 
 function adjustGain(direction) {
@@ -26,12 +26,12 @@ function adjustGain(direction) {
     } else {
         userGainFactor = userGainFactor / GAIN_STEP;
     }
-    // 重算 clip = 自动估值 × 用户偏移
+    // Recompute clip = auto estimate x user offset
     const baseClip = estimateClip(currentSliceData) || 1.0;
     currentClip = baseClip * userGainFactor;
     redrawAll();
     const gainDb = 20 * Math.log10(1.0 / userGainFactor);
-    setStatus('ready', `增益 ${direction === 'up' ? '+' : ''}${gainDb.toFixed(1)} dB  clip=${currentClip.toFixed(2)}`);
+    setStatus('ready', `Gain ${direction === 'up' ? '+' : ''}${gainDb.toFixed(1)} dB  clip=${currentClip.toFixed(2)}`);
 }
 
 function adjustScale(axis, direction) {
@@ -39,10 +39,10 @@ function adjustScale(axis, direction) {
     const factor = direction === 'up' ? SCALE_STEP : (1 / SCALE_STEP);
     if (axis === 'y') {
         scaleY = Math.max(0.1, Math.min(10, scaleY * factor));
-        setStatus('ready', `纵向缩放 ×${scaleY.toFixed(2)}`);
+        setStatus('ready', `Vertical zoom ×${scaleY.toFixed(2)}`);
     } else {
         scaleX = Math.max(0.1, Math.min(10, scaleX * factor));
-        setStatus('ready', `横向缩放 ×${scaleX.toFixed(2)}`);
+        setStatus('ready', `Horizontal zoom ×${scaleX.toFixed(2)}`);
     }
     redrawAll();
     if (typeof updateAxes === 'function') updateAxes();
@@ -53,7 +53,7 @@ function fitToWindow() {
     scaleX = 1.0;
     redrawAll();
     if (typeof updateAxes === 'function') updateAxes();
-    setStatus('ready', '🔲 自适应窗口 ×1.00');
+    setStatus('ready', 'Fit to window ×1.00');
 }
 
 function redrawAll() {
@@ -119,7 +119,7 @@ function _renderSliceCanvas2D(data, rows, cols) {
 function renderSliceToCanvas(data, rows, cols) {
     currentSliceData = data;
     currentSliceShape = [rows, cols];
-    // 保留用户增益偏移: 自动估值 × 用户倍率
+    // Keep the user gain offset: auto estimate x user factor
     const baseClip = estimateClip(data) || 1.0;
     currentClip = baseClip * userGainFactor;
 
@@ -200,7 +200,7 @@ function drawSeismic() {
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // 应用缩放: 以画布中心为原点
+    // Apply zoom around the canvas centre
     ctx.save();
     const cx = w / 2, cy = h / 2;
     ctx.translate(cx, cy);
@@ -222,7 +222,7 @@ function drawSeismic() {
         ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = 'white';
         ctx.font = '14px sans-serif';
-        ctx.fillText('请加载 SGY/VDS 数据...', w / 2 - 60, h / 2);
+        ctx.fillText('Load SGY/VDS data...', w / 2 - 60, h / 2);
     }
 
     if (displayMode === 'wv' && currentSliceData && currentSliceShape && curDir !== 'timeslice') {

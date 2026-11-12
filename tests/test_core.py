@@ -376,9 +376,9 @@ class TestNpyService:
     def test_read_inline_out_of_bounds_raises(self):
         import npy_service
         vol_dir, _ = self._create_test_volume(shape=(5, 8, 10))
-        with pytest.raises(IndexError, match="Inline 索引"):
+        with pytest.raises(IndexError, match="Inline index"):
             npy_service.read_inline(str(vol_dir), il_index=5)
-        with pytest.raises(IndexError, match="Inline 索引"):
+        with pytest.raises(IndexError, match="Inline index"):
             npy_service.read_inline(str(vol_dir), il_index=-1)
 
     # -- read_crossline --
@@ -400,9 +400,9 @@ class TestNpyService:
     def test_read_crossline_out_of_bounds_raises(self):
         import npy_service
         vol_dir, _ = self._create_test_volume(shape=(5, 8, 10))
-        with pytest.raises(IndexError, match="Crossline 索引"):
+        with pytest.raises(IndexError, match="Crossline index"):
             npy_service.read_crossline(str(vol_dir), xl_index=8)
-        with pytest.raises(IndexError, match="Crossline 索引"):
+        with pytest.raises(IndexError, match="Crossline index"):
             npy_service.read_crossline(str(vol_dir), xl_index=-1)
 
     # -- read_timeslice --
@@ -424,9 +424,9 @@ class TestNpyService:
     def test_read_timeslice_out_of_bounds_raises(self):
         import npy_service
         vol_dir, _ = self._create_test_volume(shape=(5, 8, 10))
-        with pytest.raises(IndexError, match="TimeSlice 索引"):
+        with pytest.raises(IndexError, match="TimeSlice index"):
             npy_service.read_timeslice(str(vol_dir), sample_index=10)
-        with pytest.raises(IndexError, match="TimeSlice 索引"):
+        with pytest.raises(IndexError, match="TimeSlice index"):
             npy_service.read_timeslice(str(vol_dir), sample_index=-1)
 
     # -- get_metadata --
@@ -493,7 +493,7 @@ class TestNpyService:
 
     def test_read_inline_missing_volume_raises(self, tmp_path):
         import npy_service
-        with pytest.raises(FileNotFoundError, match="NumPy 卷不存在"):
+        with pytest.raises(FileNotFoundError, match="NumPy volume not found"):
             npy_service.read_inline(str(tmp_path / "missing_vol"), il_index=0)
 
 

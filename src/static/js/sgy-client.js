@@ -1,7 +1,7 @@
 // sgy-client.js — SGY slice browsing, navigation, pick points
 // Extracted from sam.html — contains slice cache, loading, navigation, and canvas interaction
 
-// ── LRU 缓存 ───────────────────────────────────────
+// ── LRU cache ───────────────────────────────────────
 function cacheGet(map, key) {
     if (!map.has(key)) return null;
     const v = map.get(key);
@@ -16,12 +16,12 @@ function cachePut(map, key, val, maxSize) {
     map.set(key, val);
 }
 
-// 将后端返回的 (可能嵌套的) 2D 列表展平为一维 Float32Array
+// Flatten the (possibly nested) 2D list from the backend into a 1D Float32Array
 function flattenSliceData(data, shape) {
     const total = shape[0] * shape[1];
     const out = new Float32Array(total);
     if (Array.isArray(data) && Array.isArray(data[0])) {
-        // 嵌套 2D 列表 (Zarr/VDS 当前返回格式)
+        // Nested 2D list (current Zarr/VDS response format)
         for (let i = 0; i < shape[0]; i++) {
             const row = data[i];
             for (let j = 0; j < shape[1]; j++) {
@@ -29,13 +29,13 @@ function flattenSliceData(data, shape) {
             }
         }
     } else {
-        // 已经是扁平列表
+        // Already a flat list
         for (let i = 0; i < total; i++) out[i] = data[i];
     }
     return out;
 }
 
-// ── 当前切片最大索引 ──────────────────────────────
+// ── Max index for current slice ──────────────────────────────
 function currentMaxIndex() {
     if (curDir === 'inline')     return volInfo.ilCount;
     if (curDir === 'crossline')  return volInfo.xlCount;
@@ -43,7 +43,7 @@ function currentMaxIndex() {
 }
 function currentSliceKey() { return `${curDir}:${curIndex}`; }
 
-// ── Y 轴单位计算与切换 ───────────────────────────
+// ── Y-axis unit calculation and switching ───────────────────────────
 function computeYRange() {
     const t_ms = (volInfo.tsCount || 0) * (volInfo.dtUs || 1000) / 1000;
     if (yAxisUnit === 'depth') return t_ms * velocity / 2 / 1000;  // depth = v * t / 2, t in ms → m
@@ -58,18 +58,18 @@ function syncYAxis() {
     COORD.yLabel = computeYLabel();
 }
 
-// 切换 Y 轴单位 (带保存提示)
+// Switch Y-axis unit (with save prompt)
 async function setYAxisUnit(unit) {
     if (unit !== 'time' && unit !== 'depth') return;
     if (unit === yAxisUnit) return;
-    // 切换前: 提示保存或自动保存当前拾取
+    // Before switching: prompt to save or auto-save current picks
     const total = [...picksBySlice.values()].reduce((s, a) => s + a.length, 0);
     if (total > 0) {
         const ok = window.confirm(
-            `当前有 ${total} 个未导出的拾取点。\n` +
-            `切换 Y 轴单位会改变显示方式。\n\n` +
-            `点击"确定"自动保存到数据库后切换;\n` +
-            `点击"取消"中止切换。`
+            `There are ${total} unexported pick points.\n` +
+            `Switching the Y-axis unit changes how they are displayed.\n\n` +
+            `Click "OK" to auto-save to the database and switch;\n` +
+            `click "Cancel" to abort.`
         );
         if (!ok) {
             const sel = document.getElementById('yUnitSelect');
@@ -84,7 +84,7 @@ async function setYAxisUnit(unit) {
     syncYAxis();
     updateAxes();
     drawSeismic();
-    setStatus('ready', `Y轴: ${COORD.yLabel}`);
+    setStatus('ready', `Y axis: ${COORD.yLabel}`);
 }
 
 async function autoSavePicks() {
@@ -106,7 +106,7 @@ async function autoSavePicks() {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({session_id: currentSessionId, points: allPts}),
             });
-        } catch (e) { console.warn('自动保存失败:', e); }
+        } catch (e) { console.warn('Auto-save failed:', e); }
     }
 }
 
@@ -114,44 +114,44 @@ function applyVelocity() {
     const velIn = document.getElementById('velocityInput');
     const v = +velIn.value;
     if (!v || v < 100 || v > 20000) {
-        setStatus('error', '速度应在 100~20000 m/s');
+        setStatus('error', 'Velocity must be 100~20000 m/s');
         return;
     }
     velocity = v;
     if (yAxisUnit === 'depth') {
         syncYAxis();
         updateAxes();
-        setStatus('ready', `速度: ${velocity} m/s (depth 已重算)`);
+        setStatus('ready', `Velocity: ${velocity} m/s (depth recalculated)`);
     } else {
-        setStatus('ready', `速度: ${velocity} m/s (切到 Depth 时生效)`);
+        setStatus('ready', `Velocity: ${velocity} m/s (applies when switched to Depth)`);
     }
 }
 
-// ── 坐标轴动态更新（支持缩放） ─────────────────────
+// ── Dynamic axis update (zoom aware) ─────────────────────
 function updateAxes() {
-    // Y 轴标签动态更新
+    // Update Y-axis label
     const yLabelEl = document.getElementById('yAxisLabel');
     if (yLabelEl) yLabelEl.textContent = COORD.yLabel;
 
-    // 缩放时: 以画布中心为原点，scaleX/scaleY 放大后，
-    // 可见范围 = 原始范围 / scale，中心偏移 50%
-    // 可见起始 = 0.5 - 0.5/scale, 可见终止 = 0.5 + 0.5/scale (归一化坐标)
+    // When zoomed: origin is the canvas center; after scaling by scaleX/scaleY,
+    // visible range = original range / scale, centered at 50%
+    // visible start = 0.5 - 0.5/scale, visible end = 0.5 + 0.5/scale (normalized coords)
     const xVis0 = 0.5 - 0.5 / scaleX;
     const xVis1 = 0.5 + 0.5 / scaleX;
     const yVis0 = 0.5 - 0.5 / scaleY;
     const yVis1 = 0.5 + 0.5 / scaleY;
 
-    // 顶部 X 轴：根据 curDir 决定横轴显示什么
+    // Top X axis: content depends on curDir
     const topAxis = document.getElementById('topAxis');
     topAxis.innerHTML = '';
     const nTicks = 6;
 
     let xLabel = '';
     for (let i = 0; i < nTicks; i++) {
-        // 在可见范围内均匀分布刻度
+        // Spread ticks evenly over the visible range
         const t = nTicks > 1 ? i / (nTicks - 1) : 0.5;
-        const frac = xVis0 + t * (xVis1 - xVis0);  // 归一化 [0,1] 内的可见位置
-        const pct = t * 100;  // 刻度在轴容器上的显示位置百分比
+        const frac = xVis0 + t * (xVis1 - xVis0);  // visible position in normalized [0,1]
+        const pct = t * 100;  // tick position on the axis container, in percent
         let val = 0;
         if (curDir === 'inline') {
             val = (COORD.crossMin + frac * (COORD.crossMax - COORD.crossMin)).toFixed(0);
@@ -169,13 +169,13 @@ function updateAxes() {
         topAxis.appendChild(div);
     }
 
-    // 左侧 Y 轴：根据 curDir 决定纵轴显示什么
+    // Left Y axis: content depends on curDir
     const leftAxis = document.getElementById('leftAxis');
     leftAxis.querySelectorAll('.tick-label').forEach(el => el.remove());
     const nDepth = 8;
 
     if (curDir === 'timeslice') {
-        // TimeSlice: 纵轴 = Inline
+        // TimeSlice: vertical axis = Inline
         for (let i = 0; i < nDepth; i++) {
             const t = nDepth > 1 ? i / (nDepth - 1) : 0.5;
             const frac = yVis0 + t * (yVis1 - yVis0);
@@ -188,7 +188,7 @@ function updateAxes() {
             leftAxis.appendChild(div);
         }
     } else {
-        // Inline/Crossline: 纵轴 = Time 或 Depth
+        // Inline/Crossline: vertical axis = Time or Depth
         for (let i = 0; i < nDepth; i++) {
             const t = nDepth > 1 ? i / (nDepth - 1) : 0.5;
             const frac = yVis0 + t * (yVis1 - yVis0);
@@ -204,7 +204,7 @@ function updateAxes() {
     if (typeof compareAdjustAxes === 'function') compareAdjustAxes();
 }
 
-// 后端切片 URL 适配: Zarr 与 VDS 接口一致
+// Backend slice URL: Zarr and VDS share the same API
 function sliceApiUrl(source, name, dir, index) {
     return `/${source}/${name}/slice/${dir}/${index}`;
 }
@@ -272,7 +272,7 @@ async function restoreCurrentSgyIfLoaded() {
         info.filename ? info.filename.replace(/\.sgy$/i, '') : null,
         { preserveBackup: true }
     );
-    setStatus('ready', `SGY: ${info.filename}  IL ${volInfo.ilMin}~${volInfo.ilMax}  当前 Inline ${volInfo.ilMin + curIndex}`);
+    setStatus('ready', `SGY: ${info.filename}  IL ${volInfo.ilMin}~${volInfo.ilMax}  current Inline ${volInfo.ilMin + curIndex}`);
     return true;
 }
 
@@ -281,7 +281,7 @@ async function fetchSlice(source, name, dir, index, mode = 'raw') {
     if (source === 'api/npy' && mode && mode !== 'raw') url += `?mode=${encodeURIComponent(mode)}`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    // 二进制 float32 响应: shape 从响应头读取
+    // Binary float32 response: shape is read from response headers
     const rows = parseInt(resp.headers.get('X-Rows') || '0');
     const cols = parseInt(resp.headers.get('X-Cols') || '0');
     const buf = await resp.arrayBuffer();
@@ -289,22 +289,22 @@ async function fetchSlice(source, name, dir, index, mode = 'raw') {
     if (rows && cols) {
         return { shape: [rows, cols], data };
     }
-    // fallback: JSON 响应 (兼容旧 zarr 端点)
+    // fallback: JSON response (legacy zarr endpoint)
     try {
         const json = JSON.parse(new TextDecoder().decode(buf));
         return json;
     } catch { return { shape: [data.length, 1], data }; }
 }
 
-// 主入口: 加载并渲染一条切片
+// Main entry: load and render one slice
 async function loadAndRenderSlice(dir, index) {
     if (!volInfo.name) {
-        setStatus('idle', '请先加载 SGY/VDS');
+        setStatus('idle', 'Load an SGY/VDS first');
         return;
     }
     if (isLoading) { pendingIdx = {dir, index}; return; }
     isLoading = true;
-    setStatus('loading', `加载 ${dir} ${index}...`);
+    setStatus('loading', `Loading ${dir} ${index}...`);
 
     const mode = volInfo.source === 'api/npy' ? sliceMode : 'raw';
     // Key includes volume and mode: the noisy/clean pair and raw/low-freq share directions and indices
@@ -316,33 +316,33 @@ async function loadAndRenderSlice(dir, index) {
             cachePut(sliceCache, key, payload, SLICE_CACHE_SIZE);
         }
         const rows = payload.shape[0], cols = payload.shape[1];
-        // 二进制响应已直接是 Float32Array, 无需 flatten
+        // Binary response is already a Float32Array, no flatten needed
         const data = (payload.data instanceof Float32Array && payload.data.length === rows * cols)
             ? payload.data
             : flattenSliceData(payload.data, payload.shape);
         renderSliceToCanvas(data, rows, cols);
-        // 同步坐标范围 (用于 mousemove 拾取坐标显示)
+        // Sync coordinate ranges (for mousemove pick coordinate display)
         syncCoordFromSlice(dir, index);
-        updateAxes();  // 更新坐标轴标注，确保 IL/XL 范围正确显示
-        // logits 切换: 新切片清旧 mask 和 embedding
+        updateAxes();  // update axis labels so IL/XL ranges show correctly
+        // logits: a new slice clears the old mask and embedding
         logitsMap = null; logitsWidth = 0; logitsHeight = 0;
-        embeddingId = null; embeddingImageSize = null;  // 新切片需要重新计算 embedding
+        embeddingId = null; embeddingImageSize = null;  // new slice needs a fresh embedding
         drawSeismic();
-        loadVolumeMaskOverlay(dir, index);  // 若该切片已有体 mask (含传播结果) 则叠加显示
+        loadVolumeMaskOverlay(dir, index);  // overlay the volume mask (incl. propagation results) if this slice has one
         updateSubtitle(dir, index);
         updateLineControls(index);
         if (typeof updateSurveyMap === 'function') updateSurveyMap();
         if (typeof updateAutoRefineControl === 'function') updateAutoRefineControl();
         if (typeof syncCompareControls === 'function') syncCompareControls();
         if (typeof updateCompareView === 'function') updateCompareView();
-        // 创建新拾取会话
+        // Create a new pick session
         currentSessionId = null;
         fetch('/api/db/session?slice_id=0', {method: 'POST'})
             .then(r => r.json()).then(d => { currentSessionId = d.session_id; })
             .catch(() => {});
-        setStatus('ready', `${dir} ${index}  缓存 ${sliceCache.size}/${SLICE_CACHE_SIZE}  [${rows}×${cols}] clip=${currentClip.toFixed(0)}`);
+        setStatus('ready', `${dir} ${index}  cache ${sliceCache.size}/${SLICE_CACHE_SIZE}  [${rows}×${cols}] clip=${currentClip.toPrecision(3)}`);
     } catch (e) {
-        setStatus('error', `加载失败: ${e.message}`);
+        setStatus('error', `Load failed: ${errText(e)}`);
     } finally {
         isLoading = false;
         if (pendingIdx) {
@@ -352,24 +352,24 @@ async function loadAndRenderSlice(dir, index) {
     }
 }
 
-// 同步 COORD 以便拾取时正确反算 IL/XL/Depth
+// Sync COORD so picks map back to the correct IL/XL/Depth
 function syncCoordFromSlice(dir, index) {
     if (dir === 'inline') {
-        // Inline 剖面：index 是 IL 下标，横轴是 Crossline 范围
+        // Inline section: index is the IL offset, horizontal axis is the Crossline range
         COORD.ilMin = volInfo.ilMin;
         COORD.ilMax = volInfo.ilMax;
-        COORD.xl = volInfo.ilMin + index;  // 当前 Inline 编号
+        COORD.xl = volInfo.ilMin + index;  // current Inline number
         COORD.crossMin = volInfo.xlMin;
         COORD.crossMax = volInfo.xlMax;
     } else if (dir === 'crossline') {
-        // Crossline 剖面：index 是 XL 下标，横轴是 Inline 范围
+        // Crossline section: index is the XL offset, horizontal axis is the Inline range
         COORD.ilMin = volInfo.ilMin;
         COORD.ilMax = volInfo.ilMax;
-        COORD.xl = volInfo.xlMin + index;  // 当前 Crossline 编号
+        COORD.xl = volInfo.xlMin + index;  // current Crossline number
         COORD.crossMin = volInfo.ilMin;
         COORD.crossMax = volInfo.ilMax;
     } else {
-        // TimeSlice: 横轴 XL, 纵轴 IL, depth 固定
+        // TimeSlice: horizontal XL, vertical IL, fixed depth
         COORD.crossMin = volInfo.xlMin;
         COORD.crossMax = volInfo.xlMax;
     }
@@ -377,7 +377,7 @@ function syncCoordFromSlice(dir, index) {
 }
 
 // ════════════════════════════════════════════════════
-// 导航
+// Navigation
 // ════════════════════════════════════════════════════
 
 function stepSlice(delta) {
@@ -405,7 +405,7 @@ function gotoFirst() { gotoSlice(0); }
 function gotoLast()  { gotoSlice(currentMaxIndex() - 1); }
 
 // ════════════════════════════════════════════════════
-// 播放控制
+// Playback control
 // ════════════════════════════════════════════════════
 
 function startPlay() {
@@ -424,7 +424,7 @@ function stopPlay() {
 function togglePlay() { playTimer ? stopPlay() : startPlay(); }
 
 // ════════════════════════════════════════════════════
-// UI 更新
+// UI update
 // ════════════════════════════════════════════════════
 
 function updateSubtitle(dir, index) {
@@ -438,7 +438,7 @@ function updateSubtitle(dir, index) {
     const coordVal = curDir === 'inline' ? (volInfo.ilMin + index)
                    : curDir === 'crossline' ? (volInfo.xlMin + index)
                    : index;
-    sub.textContent = `${labels[dir]} ${coordVal}  (vol=${volName})  本切片 ${n} 点 / 累计 ${total}`;
+    sub.textContent = `${labels[dir]} ${coordVal}  (vol=${volName})  this slice ${n} pts / total ${total}`;
 }
 function updateLineControls(idx) {
     const slider = document.getElementById('lineSlider');
@@ -447,7 +447,7 @@ function updateLineControls(idx) {
     if (lineNo && document.activeElement !== lineNo) lineNo.value = idx;
     const max = currentMaxIndex();
     const posLabel = document.getElementById('slicePosLabel');
-    // 显示方向 + 当前线号 (实际 IL/XL/TS 值)
+    // Show direction + current line number (actual IL/XL/TS value)
     let lineVal = idx;
     if (curDir === 'inline') lineVal = volInfo.ilMin + idx;
     else if (curDir === 'crossline') lineVal = volInfo.xlMin + idx;
@@ -473,18 +473,18 @@ function updateLineRangeLabel() {
 }
 
 // ════════════════════════════════════════════════════
-// 交互事件
+// Interaction events
 // ════════════════════════════════════════════════════
 
 canvas.addEventListener('mousemove', e => {
     const r = canvas.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
-    const w = canvas.width, h = canvas.height;
-    // 横轴坐标: inline→XL, crossline→IL, timeslice→XL
+    const w = r.width, h = r.height;   // displayed size: the backing store can differ from the CSS box
+    // Horizontal coord: inline→XL, crossline→IL, timeslice→XL
     const crossVal = Math.round(COORD.crossMin + (x/w)*(COORD.crossMax-COORD.crossMin));
-    // 纵轴: 剖面→Time/Depth, timeslice→IL
+    // Vertical: section→Time/Depth, timeslice→IL
     const yVal = (COORD.yTop + (y/h)*COORD.yRange).toFixed(1);
-    // 振幅值
+    // Amplitude value
     let amp = 'N/A';
     if (currentSliceData && currentSliceShape) {
         const [rows, cols] = currentSliceShape;
@@ -492,7 +492,7 @@ canvas.addEventListener('mousemove', e => {
         const sx = Math.min(cols-1, Math.floor(x/w*cols));
         amp = currentSliceData[sy*cols+sx].toFixed(1);
     }
-    // Logits 值
+    // Logits value
     let logits = 'N/A';
     if (logitsMap && logitsMode) {
         const ix = Math.floor((x/w)*logitsWidth);
@@ -509,8 +509,9 @@ canvas.addEventListener('mouseleave', () => infoBox.style.display='none');
 
 canvas.addEventListener('click', async e => {
     const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    // 反算 IL/XL/Y (基于当前 COORD, Y 跟随 yAxisUnit)
+    // Position in backing-store pixels: the canvas's internal size can differ from its displayed size
+    const x = (e.clientX - r.left) * canvas.width / r.width, y = (e.clientY - r.top) * canvas.height / r.height;
+    // Map back to IL/XL/Y (from current COORD, Y follows yAxisUnit)
     let il, xl, yVal;
     let time_ms = 0, depth_m = 0;
     if (curDir === 'inline') {
@@ -518,7 +519,7 @@ canvas.addEventListener('click', async e => {
         const yPct = y / canvas.height;
         xl = (COORD.crossMin + crossPct * (COORD.crossMax - COORD.crossMin)).toFixed(2);
         il = (volInfo.ilMin + curIndex).toFixed(0);
-        time_ms = +(COORD.yTop - yPct * COORD.yRange).toFixed(2);
+        time_ms = +(COORD.yTop + yPct * COORD.yRange).toFixed(2);
         if (yAxisUnit === 'time') {
             yVal = time_ms;
         } else {
@@ -530,7 +531,7 @@ canvas.addEventListener('click', async e => {
         const yPct = y / canvas.height;
         il = (COORD.crossMin + ilPct * (COORD.crossMax - COORD.crossMin)).toFixed(2);
         xl = (volInfo.xlMin + curIndex).toFixed(0);
-        time_ms = +(COORD.yTop - yPct * COORD.yRange).toFixed(2);
+        time_ms = +(COORD.yTop + yPct * COORD.yRange).toFixed(2);
         if (yAxisUnit === 'time') {
             yVal = time_ms;
         } else {
@@ -550,7 +551,7 @@ canvas.addEventListener('click', async e => {
     const color = pickMode === 'include' ? 'green' : 'red';
     const label = pickMode === 'include' ? 1 : 0;
     const sliceKey = currentSliceKey();
-    const nx = x / canvas.width, ny = y / canvas.height;  // 归一化坐标, 跟随缩放
+    const nx = x / canvas.width, ny = y / canvas.height;  // normalized coords, zoom aware
     const point = {
         x, y, nx, ny, il, xl,
         time_ms, depth_m,
@@ -564,7 +565,7 @@ canvas.addEventListener('click', async e => {
     drawSeismic();
     updateSubtitle(curDir, curIndex);
 
-    // 存入数据库 (depth 字段跟随当前单位,便于后续分析)
+    // Save to database (depth field uses the current unit, for later analysis)
     if (currentSessionId) {
         fetch(`/api/db/session/${currentSessionId}/points`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -620,7 +621,7 @@ btnExport.onclick = () => {
     a.click();
 };
 
-// ── 底部备份状态更新 ─────────────────────────────────
+// ── Bottom backup status update ─────────────────────────────────
 function updateBackupStatus() {
     const el = document.getElementById('backupStatus');
     if (!el) return;
@@ -632,28 +633,28 @@ function updateBackupStatus() {
             .reduce((s, arr) => s + (Array.isArray(arr) ? arr.length : 0), 0);
         if (total === 0) { el.textContent = ''; return; }
         const age = Date.now() - (snap.timestamp || 0);
-        const ageStr = age < 60000 ? '刚刚'
-                     : age < 3600000 ? Math.floor(age / 60000) + '分钟前'
-                     : Math.floor(age / 3600000) + '小时前';
+        const ageStr = age < 60000 ? 'just now'
+                     : age < 3600000 ? Math.floor(age / 60000) + ' min ago'
+                     : Math.floor(age / 3600000) + ' h ago';
         const vol = snap.volName ? ` [${snap.volName}]` : '';
-        el.textContent = `💾 ${total} 点${vol} · ${ageStr}`;
+        el.textContent = `💾 ${total} pts${vol} · ${ageStr}`;
     } catch { el.textContent = ''; }
 }
 
 // ════════════════════════════════════════════════════
-// SGY 加载 & 切片生成
+// SGY loading & slice generation
 // ════════════════════════════════════════════════════
 
 btnLoadSGY.onclick = () => sgyFileInput.click();
 sgyFileInput.onchange = async e => {
     const file = e.target.files[0]; if (!file) return;
-    setStatus('loading', '上传 SGY 中...');
+    setStatus('loading', 'Uploading SGY...');
     const form = new FormData(); form.append('file', file);
     try {
         const resp = await fetch('/api/sgy/upload', {method: 'POST', body: form});
-        if (!resp.ok) throw new Error((await resp.json()).detail);
+        if (!resp.ok) throw await respError(resp);
         const info = await resp.json();
-        // 填充卷信息
+        // Fill in volume info
         volInfo = {
             source: 'api/npy',
             name: info.npy_name || info.zarr_name || file.name.replace(/\.sgy$/i, ''),
@@ -672,10 +673,10 @@ sgyFileInput.onchange = async e => {
         COORD.xl = volInfo.xlMin;
         syncYAxis();
         updateAxes();
-        // 默认渲染中间一条 inline
+        // render the middle inline by default
         curDir = 'inline';
         curIndex = Math.floor(volInfo.ilCount / 2);
-        // dirSelect / fpsInput / loopCb / yUnitSelect 同步
+        // sync dirSelect / fpsInput / loopCb / yUnitSelect
         const dirSel = document.getElementById('dirSelect');
         if (dirSel) dirSel.value = curDir;
         const fpsIn = document.getElementById('fpsInput');
@@ -683,20 +684,20 @@ sgyFileInput.onchange = async e => {
         const loopChk = document.getElementById('loopCb');
         if (loopChk) loopChk.checked = loopEnabled;
         updateLineRangeLabel();
-        // 打开 SGY 后立即显示滚动浏览条
+        // Show the scroll bar right after opening the SGY
         slicePanel.classList.add('visible');
-        // 清旧拾取
+        // Clear old picks
         picksBySlice.clear();
         clearBackup();
-        // 触发首次加载：默认渲染中间一条 inline
+        // Trigger first load: render the middle inline by default
         await loadAndRenderSlice(curDir, curIndex);
         btnGenSlices.disabled = false;
-        setStatus('ready', `SGY: ${info.filename}  IL ${volInfo.ilMin}~${volInfo.ilMax}  当前 Inline ${volInfo.ilMin + curIndex}`);
-    } catch (e) { setStatus('error', 'SGY 加载失败: ' + e.message); }
+        setStatus('ready', `SGY: ${info.filename}  IL ${volInfo.ilMin}~${volInfo.ilMax}  current Inline ${volInfo.ilMin + curIndex}`);
+    } catch (e) { setStatus('error', 'SGY load failed: ' + e.message); }
     e.target.value = '';
 };
 
-// 加载本地图片
+// Load a local image
 btnLoadImage.onclick = () => imageFileInput.click();
 imageFileInput.onchange = e => {
     const file = e.target.files[0];
@@ -706,11 +707,11 @@ imageFileInput.onchange = e => {
     e.target.value = '';
 };
 
-// ── 加载 VDS 卷数据（OpenVDS） ─────────────────────────────
+// ── Load VDS volume (OpenVDS) ─────────────────────────────
 const btnLoadVDS = document.getElementById('btnLoadVDS');
 const vdsFileInput = document.getElementById('vdsFileInput');
 
-// 启动时检查 OpenVDS 是否可用；不可用则禁用按钮并给出提示
+// On startup check whether OpenVDS is available; if not, disable the button with a hint
 (async function checkVdsAvailability() {
     if (!btnLoadVDS) return;
     try {
@@ -718,34 +719,34 @@ const vdsFileInput = document.getElementById('vdsFileInput');
         const data = await resp.json();
         if (!data.available) {
             btnLoadVDS.disabled = true;
-            btnLoadVDS.title = 'OpenVDS 未安装 (pip install openvds)，暂不可用';
+            btnLoadVDS.title = 'OpenVDS not installed (pip install openvds), unavailable';
             btnLoadVDS.style.opacity = '0.5';
         }
-    } catch { /* 状态检查失败时不禁用，交由上传时反馈 */ }
+    } catch { /* if the status check fails, do not disable; report on upload instead */ }
 })();
 
 if (btnLoadVDS) btnLoadVDS.onclick = () => vdsFileInput.click();
 if (vdsFileInput) vdsFileInput.onchange = async e => {
     const file = e.target.files[0];
     if (!file) return;
-    setStatus('loading', '上传 VDS 中...');
+    setStatus('loading', 'Uploading VDS...');
     const form = new FormData();
     form.append('file', file);
     try {
         const resp = await fetch('/api/vds/upload', { method: 'POST', body: form });
         if (!resp.ok) throw new Error((await resp.json()).detail || `HTTP ${resp.status}`);
         const info = await resp.json();
-        // 复用通用卷激活流程，source 指定为 api/vds（切片读取走 /api/vds/{name}/slice/...）
+        // Reuse the shared volume activation flow with source api/vds (slices read from /api/vds/{name}/slice/...)
         await activateVolume(info, info.filename, { source: 'api/vds' });
-        setStatus('ready', `VDS: ${info.filename}  IL ${volInfo.ilMin}~${volInfo.ilMax}  当前 Inline ${volInfo.ilMin + curIndex}`);
+        setStatus('ready', `VDS: ${info.filename}  IL ${volInfo.ilMin}~${volInfo.ilMax}  current Inline ${volInfo.ilMin + curIndex}`);
     } catch (err) {
-        setStatus('error', 'VDS 加载失败: ' + err.message);
+        setStatus('error', 'VDS load failed: ' + err.message);
     } finally {
         e.target.value = '';
     }
 };
 
-// ── 生成切片弹窗逻辑 ─────────────────────────────────
+// ── Generate-slices dialog logic ─────────────────────────────────
 const genModal = document.getElementById('genSlicesModal');
 const genIL = document.getElementById('genIL');
 const genXL = document.getElementById('genXL');
@@ -760,7 +761,7 @@ const genXLTo = document.getElementById('genXLTo');
 const genTSFrom = document.getElementById('genTSFrom');
 const genTSTo = document.getElementById('genTSTo');
 
-// 按间隔 + 范围生成索引列表
+// Build the index list from step + range
 function buildIndices(min, max, step, from, to) {
     const lo = (from !== '' && !isNaN(+from)) ? +from : min;
     const hi = (to !== '' && !isNaN(+to)) ? +to : max;
@@ -781,7 +782,7 @@ function updateGenPreview() {
         const ilMin = volInfo.ilMin, ilMax = volInfo.ilMax;
         const indices = buildIndices(ilMin, ilMax, ilStep, genILFrom.value, genILTo.value);
         document.getElementById('genILPreview').textContent =
-            `${ilMin}~${ilMax}, 共 ${indices.length} 条`;
+            `${ilMin}~${ilMax}, ${indices.length} lines`;
         total += indices.length;
     } else {
         document.getElementById('genILPreview').textContent = '';
@@ -791,7 +792,7 @@ function updateGenPreview() {
         const xlMin = volInfo.xlMin, xlMax = volInfo.xlMax;
         const indices = buildIndices(xlMin, xlMax, xlStep, genXLFrom.value, genXLTo.value);
         document.getElementById('genXLPreview').textContent =
-            `${xlMin}~${xlMax}, 共 ${indices.length} 条`;
+            `${xlMin}~${xlMax}, ${indices.length} lines`;
         total += indices.length;
     } else {
         document.getElementById('genXLPreview').textContent = '';
@@ -801,26 +802,26 @@ function updateGenPreview() {
         const tsMin = 0, tsMax = Math.round((volInfo.tsCount - 1) * (volInfo.dtUs || 1000) / 1000);
         const indices = buildIndices(tsMin, tsMax, tsStep, genTSFrom.value, genTSTo.value);
         document.getElementById('genTSPreview').textContent =
-            `${tsMin}~${tsMax}ms, 共 ${indices.length} 条`;
+            `${tsMin}~${tsMax}ms, ${indices.length} slices`;
         total += indices.length;
     } else {
         document.getElementById('genTSPreview').textContent = '';
     }
 
     document.getElementById('genTotalPreview').textContent =
-        total > 0 ? `合计: ${total} 张切片` : '请至少选择一种切片类型';
+        total > 0 ? `Total: ${total} slices` : 'Select at least one slice type';
     document.getElementById('genModalOK').disabled = total === 0;
 }
 
-// 绑定预览更新
+// Bind preview updates
 [genIL, genXL, genTS, genILStep, genXLStep, genTSStep,
  genILFrom, genILTo, genXLFrom, genXLTo, genTSFrom, genTSTo
 ].forEach(el => el.addEventListener('input', updateGenPreview));
 
-// 打开弹窗
+// Open dialog
 btnGenSlices.onclick = () => {
-    if (!volInfo.name) { setStatus('error', '请先加载 SGY'); return; }
-    // 用当前卷范围填充默认值
+    if (!volInfo.name) { setStatus('error', 'Load an SGY first'); return; }
+    // Fill defaults from the current volume range
     genILFrom.placeholder = String(volInfo.ilMin);
     genILTo.placeholder = String(volInfo.ilMax);
     genXLFrom.placeholder = String(volInfo.xlMin);
@@ -828,7 +829,7 @@ btnGenSlices.onclick = () => {
     const tsMax = Math.round((volInfo.tsCount - 1) * (volInfo.dtUs || 1000) / 1000);
     genTSFrom.placeholder = '0';
     genTSTo.placeholder = String(tsMax);
-    // 清空自定义范围 (保留上次的间隔设置)
+    // Clear custom ranges (keep the last step settings)
     genILFrom.value = ''; genILTo.value = '';
     genXLFrom.value = ''; genXLTo.value = '';
     genTSFrom.value = ''; genTSTo.value = '';
@@ -836,17 +837,17 @@ btnGenSlices.onclick = () => {
     genModal.style.display = 'flex';
 };
 
-// 关闭弹窗
+// Close dialog
 document.getElementById('genModalClose').onclick = () => genModal.style.display = 'none';
 document.getElementById('genModalCancel').onclick = () => genModal.style.display = 'none';
 genModal.addEventListener('click', e => {
     if (e.target === genModal) genModal.style.display = 'none';
 });
 
-// 确定生成
+// Confirm generation
 document.getElementById('genModalOK').onclick = async () => {
     genModal.style.display = 'none';
-    setStatus('loading', '生成切片中...');
+    setStatus('loading', 'Generating slices...');
 
     const body = {};
     // Inline
@@ -880,18 +881,18 @@ document.getElementById('genModalOK').onclick = async () => {
             method:'POST', headers:{'Content-Type':'application/json'},
             body: JSON.stringify(body)
         });
-        if (!resp.ok) throw new Error((await resp.json()).detail);
+        if (!resp.ok) throw await respError(resp);
         const data = await resp.json();
         const parts = [];
         if (data.slices.inline) parts.push(`IL×${data.slices.inline.length}`);
         if (data.slices.crossline) parts.push(`XL×${data.slices.crossline.length}`);
         if (data.slices.timeslice) parts.push(`TS×${data.slices.timeslice.length}`);
-        setStatus('ready', `已生成 ${data.generated} 张切片 (${parts.join(' + ')})`);
+        setStatus('ready', `Generated ${data.generated} slices (${parts.join(' + ')})`);
         slicePanel.classList.add('visible');
-    } catch(e) { setStatus('error', '切片生成失败: ' + e.message); }
+    } catch(e) { setStatus('error', 'Slice generation failed: ' + e.message); }
 };
 
-// ── 📥 Import CSV — 导入之前导出的 CSV 文件 ──────────
+// ── 📥 Import CSV — import a previously exported CSV file ──────────
 document.getElementById('btnImportCSV').onclick = () => csvFileInput.click();
 csvFileInput.onchange = async e => {
     const file = e.target.files[0];
@@ -899,20 +900,20 @@ csvFileInput.onchange = async e => {
     try {
         const text = await file.text();
         const lines = text.trim().split('\n');
-        if (lines.length < 2) throw new Error('CSV 为空');
+        if (lines.length < 2) throw new Error('CSV is empty');
 
-        // 解析表头, 确定列索引
+        // Parse header, find column indices
         const header = lines[0].split(',').map(h => h.trim());
         const colIdx = {};
         header.forEach((h, i) => { colIdx[h.toLowerCase()] = i; });
 
-        // 必需列检查
+        // Required column check
         const required = ['slicekey', 'inline', 'crossline', 'label', 'color'];
         for (const col of required) {
-            if (!(col in colIdx)) throw new Error(`CSV 缺少必需列: ${col}`);
+            if (!(col in colIdx)) throw new Error(`CSV missing required column: ${col}`);
         }
 
-        // 确定 Y 值列: 优先 Depth_m, 其次 Time_ms
+        // Pick the Y column: Depth_m first, then Time_ms
         const hasDepth = 'depth_m' in colIdx;
         const hasTime = 'time_ms' in colIdx;
         const yCol = hasDepth ? colIdx['depth_m'] : (hasTime ? colIdx['time_ms'] : -1);
@@ -930,7 +931,7 @@ csvFileInput.onchange = async e => {
             const label = parseInt(cols[colIdx['label']]) || 0;
             const color = cols[colIdx['color']] || (label ? 'green' : 'red');
 
-            // Y 值解析
+            // Parse Y value
             const unit = yUnitCol >= 0 ? cols[yUnitCol] : (hasDepth ? 'depth' : 'time');
             let time_ms = 0, depth_m = 0;
             if (yCol >= 0) {
@@ -939,13 +940,13 @@ csvFileInput.onchange = async e => {
                 else { time_ms = yVal; depth_m = time_ms * velocity / 2 / 1000; }
             }
 
-            // 解析切片方向和索引
+            // Parse slice direction and index
             const parts = sliceKey.split(':');
             const dir = parts[0] || 'inline';
             const idx = parseInt(parts[1]) || 0;
 
             const point = {
-                x: 0, y: 0,  // 像素坐标无法从 CSV 恢复, 标记为 0
+                x: 0, y: 0,  // pixel coords cannot be restored from CSV, set to 0
                 il: String(il), xl: String(xl),
                 time_ms, depth_m,
                 yUnit: unit, color, label, sliceKey,
@@ -954,30 +955,30 @@ csvFileInput.onchange = async e => {
             imported.get(sliceKey).push(point);
         }
 
-        // 确认导入
+        // Confirm import
         const total = [...imported.values()].reduce((s, a) => s + a.length, 0);
-        if (total === 0) throw new Error('CSV 中没有有效数据行');
+        if (total === 0) throw new Error('No valid data rows in CSV');
 
-        const msg = `即将导入 ${total} 个拾取点 (${imported.size} 条切片)` +
-                    (skipped > 0 ? `\n跳过 ${skipped} 行格式异常` : '') +
-                    `\n\n这将替换当前所有拾取点，是否继续？`;
+        const msg = `About to import ${total} pick points (${imported.size} slices)` +
+                    (skipped > 0 ? `\nSkipping ${skipped} malformed rows` : '') +
+                    `\n\nThis replaces all current pick points. Continue?`;
         if (!confirm(msg)) return;
 
-        // 替换 picksBySlice
+        // Replace picksBySlice
         picksBySlice.clear();
         imported.forEach((pts, key) => picksBySlice.set(key, pts));
         saveToLocalStorage();
         drawSeismic();
         updateSubtitle(curDir, curIndex);
-        setStatus('ready', `📥 已导入 ${total} 个拾取点`);
+        setStatus('ready', `📥 Imported ${total} pick points`);
     } catch (e) {
-        setStatus('error', 'CSV 导入失败: ' + e.message);
+        setStatus('error', 'CSV import failed: ' + e.message);
     }
     e.target.value = '';
 };
 
 // ════════════════════════════════════════════════════
-// 浏览控制事件绑定 (按钮 / 滑块 / 方向 / 键盘)
+// Browse control bindings (buttons / slider / direction / keyboard)
 // ════════════════════════════════════════════════════
 
 document.getElementById('btnFirst').onclick  = gotoFirst;
@@ -996,7 +997,7 @@ if (fpsIn) fpsIn.onchange = e => {
     if (playTimer) { stopPlay(); startPlay(); }
 };
 
-// Y 轴单位切换 & 速度
+// Y-axis unit switch & velocity
 const yUnitSel = document.getElementById('yUnitSelect');
 if (yUnitSel) yUnitSel.onchange = e => setYAxisUnit(e.target.value);
 const btnApplyVel = document.getElementById('btnApplyVelocity');
@@ -1010,7 +1011,7 @@ const dirSel = document.getElementById('dirSelect');
 if (dirSel) dirSel.onchange = e => {
     curDir = e.target.value;
     curIndex = 0;
-    // TimeSlice 不支持 Wiggle 波形显示，自动切回 Seismic Color
+    // TimeSlice does not support Wiggle display, switch back to Seismic Color
     if (curDir === 'timeslice' && displayMode === 'wv') {
         displayMode = 'vd';
         const dmSel = document.getElementById('displayMode');
@@ -1018,7 +1019,7 @@ if (dirSel) dirSel.onchange = e => {
     }
     updateLineRangeLabel();
     loadAndRenderSlice(curDir, curIndex);
-    updateAxes();  // 方向切换后立即更新坐标轴标注
+    updateAxes();  // update axis labels right after a direction change
 };
 
 const lineNoIn = document.getElementById('lineNo');
@@ -1033,7 +1034,7 @@ if (lineNoIn) {
     };
 }
 
-// 滑块: 80ms 去抖,避免快速拖动触发请求风暴
+// Slider: 80ms debounce to avoid a request storm on fast drags
 const slider = document.getElementById('lineSlider');
 let sliderDebounce = null;
 if (slider) {
@@ -1044,7 +1045,7 @@ if (slider) {
     };
 }
 
-// 键盘: 方向键 / PageUp/PageDown / Home/End / Space
+// Keyboard: arrow keys / PageUp/PageDown / Home/End / Space
 window.addEventListener('keydown', e => {
     const tag = (e.target.tagName || '').toUpperCase();
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
@@ -1067,6 +1068,6 @@ window.addEventListener('keydown', e => {
 
 window.addEventListener('load', () => {
     restoreCurrentSgyIfLoaded().catch(err => {
-        console.warn('SGY 自动恢复失败:', err);
+        console.warn('SGY auto-restore failed:', err);
     });
 });

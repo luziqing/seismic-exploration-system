@@ -1,15 +1,15 @@
 """
-OpenVDS 地震数据体读取服务
+OpenVDS seismic volume reader service
 
-支持:
-  - 本地 .vds / .vdso 文件
-  - 云端 VDS (S3 / Azure Blob)
-  - Inline / Crossline / TimeSlice 快速切片读取
-  - VDS → Zarr 转换
+Supports:
+  - local .vds / .vdso files
+  - cloud VDS (S3 / Azure Blob)
+  - fast inline / crossline / time-slice reads
+  - VDS -> Zarr conversion
 
-OpenVDS 文档: https://osdu.pages.opengroup.org/platform/domain-data-mgmt-services/seismic/open-vds/getting-started.html
+OpenVDS docs: https://osdu.pages.opengroup.org/platform/domain-data-mgmt-services/seismic/open-vds/getting-started.html
 
-依赖: pip install openvds  (需要 Python 3.7–3.11)
+Requires: pip install openvds  (needs Python 3.7–3.11)
 """
 
 import logging
@@ -20,23 +20,23 @@ import numpy as np
 
 logger = logging.getLogger("sam3-server")
 
-# ── 可选导入 ────────────────────────────────────────────────────
+# ── Optional import ───────────────────────────────────────────
 try:
     import openvds
     _HAS_OPENVDS = True
 except ImportError:
     _HAS_OPENVDS = False
-    logger.warning("openvds 未安装, VDS 功能不可用。安装: pip install openvds")
+    logger.warning("openvds is not installed; VDS features are unavailable. Install with: pip install openvds")
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 VDS_DIR = DATA_DIR / "vds"
 
-# VDS 维度顺序: sample=0, crossline=1, inline=2
+# VDS dimension order: sample=0, crossline=1, inline=2
 SAMPLE_DIM, CROSSLINE_DIM, INLINE_DIM = 0, 1, 2
 
 
 def is_available() -> bool:
-    """检查 openvds 是否可用"""
+    """Check whether openvds is available"""
     return _HAS_OPENVDS
 
 
@@ -45,31 +45,31 @@ def _ensure_vds_dir():
 
 
 # ══════════════════════════════════════════════════════════════════
-# VDS 文件打开 & 上下文管理
+# Opening VDS files & context management
 # ══════════════════════════════════════════════════════════════════
 
 def open_vds(vds_path: str, connection_string: str = "") -> tuple:
     """
-    打开 VDS 文件, 返回 (handle, access_manager, layout)。
+    Open a VDS file; returns (handle, access_manager, layout).
 
-    参数:
-        vds_path: 本地路径或云 URL (s3://... 或 azure://...)
-        connection_string: 云端连接字符串 (本地文件留空)
+    Args:
+        vds_path: local path or cloud URL (s3://... or azure://...)
+        connection_string: cloud connection string (empty for local files)
             S3: "AccessKeyId=xxx;SecretKey=xxx;Region=us-east-1"
             Azure: "DefaultEndpointsProtocol=https;AccountName=xxx;AccountKey=xxx;EndpointSuffix=core.windows.net"
 
-    返回:
-        (handle, manager, layout) 三元组
+    Returns:
+        (handle, manager, layout) tuple
     """
     _check_openvds()
 
     vds_path = str(vds_path)
-    logger.info("打开 VDS: %s", vds_path)
+    logger.info("Opening VDS: %s", vds_path)
 
     try:
         handle = openvds.open(vds_path, connection_string)
     except RuntimeError as e:
-        raise RuntimeError(f"无法打开 VDS 文件: {vds_path}\n{e}") from e
+        raise RuntimeError(f"Cannot open VDS file: {vds_path}\n{e}") from e
 
     manager = openvds.getAccessManager(handle)
     layout = manager.volumeDataLayout
@@ -78,7 +78,7 @@ def open_vds(vds_path: str, connection_string: str = "") -> tuple:
 
 
 def close_vds(handle) -> None:
-    """关闭 VDS 句柄"""
+    """Close the VDS handle"""
     if handle is not None:
         handle.close()
 
@@ -86,13 +86,13 @@ def close_vds(handle) -> None:
 def _check_openvds():
     if not _HAS_OPENVDS:
         raise ImportError(
-            "openvds 未安装, 无法使用 VDS 功能。"
-            "请运行: pip install openvds"
+            "openvds is not installed, so VDS features are unavailable. "
+            "Run: pip install openvds"
         )
 
 
 # ══════════════════════════════════════════════════════════════════
-# 切片读取
+# Slice reading
 # ══════════════════════════════════════════════════════════════════
 
 def _read_slice(
@@ -104,11 +104,11 @@ def _read_slice(
     lod: int = 0,
 ) -> np.ndarray:
     """
-    读取一个数据切片 (底层, 异步请求→等待→返回 numpy 数组)。
+    Read one data slice (low level: async request -> wait -> return numpy array).
 
-    voxel_min / voxel_max: 三维 tuple (sample, crossline, inline)
+    voxel_min / voxel_max: 3-D tuples (sample, crossline, inline)
     """
-    # 使用 OpenVDS 自动分配缓冲区的方式 (阻塞直到数据就绪)
+    # Let OpenVDS allocate the buffer (blocks until the data is ready)
     request = manager.requestVolumeSubset(
         dimensionsND=openvds.DimensionsND.Dimensions_012,
         min=voxel_min,
@@ -116,13 +116,13 @@ def _read_slice(
         lod=lod,
         channel=channel,
     )
-    # request.data 返回一维 numpy 数组, 需要 reshape
+    # request.data returns a 1-D numpy array that needs a reshape
     ns = voxel_max[0] - voxel_min[0]
     nxl = voxel_max[1] - voxel_min[1]
     nil = voxel_max[2] - voxel_min[2]
 
     raw = np.asarray(request.data, dtype=np.float32)
-    # VDS 数据布局: [sample, crossline, inline]
+    # VDS data layout: [sample, crossline, inline]
     return raw.reshape((ns, nxl, nil))
 
 
@@ -134,17 +134,17 @@ def read_inline(
     lod: int = 0,
 ) -> np.ndarray:
     """
-    读取一条 Inline 切片。
+    Read one inline slice.
 
-    参数:
-        vds_path: VDS 文件路径
-        il_index: Inline 的零基索引 (0 ~ nInlines-1)
-        connection_string: 云端连接字符串
-        channel: 数据通道 (默认 0)
-        lod: 细节级别 (默认 0 = 全分辨率)
+    Args:
+        vds_path: VDS file path
+        il_index: zero-based inline index (0 ~ nInlines-1)
+        connection_string: cloud connection string
+        channel: data channel (default 0)
+        lod: level of detail (default 0 = full resolution)
 
-    返回:
-        numpy 数组 shape=(nCrossline, nSample)  — 与 Zarr 服务一致
+    Returns:
+        numpy array shape=(nCrossline, nSample), same as the Zarr service
     """
     _check_openvds()
 
@@ -158,7 +158,7 @@ def read_inline(
 
         data_3d = _read_slice(manager, layout, voxel_min, voxel_max, channel, lod)
         # data_3d shape: (nSample, nCrossline, 1) → squeeze → (nSample, nCrossline)
-        # 转置为 (nCrossline, nSample) 以匹配现有约定
+        # Transpose to (nCrossline, nSample) to match the existing convention
         data_2d = data_3d[:, :, 0]         # (nSample, nCrossline)
         return data_2d.T                   # (nCrossline, nSample)
     finally:
@@ -173,14 +173,14 @@ def read_crossline(
     lod: int = 0,
 ) -> np.ndarray:
     """
-    读取一条 Crossline 切片。
+    Read one crossline slice.
 
-    参数:
-        vds_path: VDS 文件路径
-        xl_index: Crossline 的零基索引 (0 ~ nCrosslines-1)
+    Args:
+        vds_path: VDS file path
+        xl_index: zero-based crossline index (0 ~ nCrosslines-1)
 
-    返回:
-        numpy 数组 shape=(nInline, nSample)
+    Returns:
+        numpy array shape=(nInline, nSample)
     """
     _check_openvds()
 
@@ -208,14 +208,14 @@ def read_timeslice(
     lod: int = 0,
 ) -> np.ndarray:
     """
-    读取一个时间切片 (沿 sample 维度)。
+    Read one time slice (along the sample axis).
 
-    参数:
-        vds_path: VDS 文件路径
-        sample_index: 采样点零基索引 (0 ~ nSamples-1)
+    Args:
+        vds_path: VDS file path
+        sample_index: zero-based sample index (0 ~ nSamples-1)
 
-    返回:
-        numpy 数组 shape=(nInline, nCrossline)
+    Returns:
+        numpy array shape=(nInline, nCrossline)
     """
     _check_openvds()
 
@@ -236,14 +236,14 @@ def read_timeslice(
 
 
 # ══════════════════════════════════════════════════════════════════
-# 元数据读取
+# Metadata reading
 # ══════════════════════════════════════════════════════════════════
 
 def get_vds_metadata(vds_path: str, connection_string: str = "") -> dict:
     """
-    读取 VDS 文件的完整元数据。
+    Read the full metadata of a VDS file.
 
-    返回:
+    Returns:
         {
             n_inlines, n_crosslines, n_samples,
             il_range, xl_range, sample_range,
@@ -255,17 +255,17 @@ def get_vds_metadata(vds_path: str, connection_string: str = "") -> dict:
 
     handle, manager, layout = open_vds(vds_path, connection_string)
     try:
-        # 维度大小
+        # Dimension sizes
         n_sample = layout.getDimensionNumSamples(SAMPLE_DIM)
         n_xl = layout.getDimensionNumSamples(CROSSLINE_DIM)
         n_il = layout.getDimensionNumSamples(INLINE_DIM)
 
-        # 轴描述符
+        # Axis descriptors
         inline_axis = layout.getAxisDescriptor(INLINE_DIM)
         crossline_axis = layout.getAxisDescriptor(CROSSLINE_DIM)
         sample_axis = layout.getAxisDescriptor(SAMPLE_DIM)
 
-        # Inline 号 (支持非零起始和负步长)
+        # Inline numbers (non-zero start and negative step supported)
         il_coords = [
             inline_axis.sampleIndexToCoordinate(i)
             for i in range(n_il)
@@ -279,7 +279,7 @@ def get_vds_metadata(vds_path: str, connection_string: str = "") -> dict:
             for i in range(n_sample)
         ]
 
-        # 通道信息
+        # Channel info
         channel_count = layout.channelCount
         channels = []
         for c in range(channel_count):
@@ -295,7 +295,7 @@ def get_vds_metadata(vds_path: str, connection_string: str = "") -> dict:
                 ],
             })
 
-        # 估算采样间隔 (从坐标差值)
+        # Estimate the sample interval (from coordinate differences)
         dt_sample = None
         if n_sample >= 2:
             dt_sample = sample_coords[1] - sample_coords[0]
@@ -328,11 +328,11 @@ def get_vds_metadata(vds_path: str, connection_string: str = "") -> dict:
 
 
 # ══════════════════════════════════════════════════════════════════
-# VDS 卷列表
+# VDS volume list
 # ══════════════════════════════════════════════════════════════════
 
 def list_vds_volumes() -> list[dict]:
-    """列出 data/vds/ 中所有 VDS 文件"""
+    """List all VDS files in data/vds/"""
     _ensure_vds_dir()
     volumes = []
     for p in sorted(VDS_DIR.iterdir()):
@@ -358,7 +358,7 @@ def list_vds_volumes() -> list[dict]:
 
 
 # ══════════════════════════════════════════════════════════════════
-# VDS → Zarr 转换 (可选, 用于统一存储)
+# VDS -> Zarr conversion (optional, for uniform storage)
 # ══════════════════════════════════════════════════════════════════
 
 def vds_to_zarr(
@@ -369,18 +369,18 @@ def vds_to_zarr(
     lod: int = 0,
 ) -> dict:
     """
-    将 VDS 文件转换为 Zarr 格式 (兼容现有流程)。
+    Convert a VDS file to Zarr (compatible with the existing flow).
 
-    逐 Inline 读取并写入 IL-chunked + XL-chunked 双存储 Zarr。
+    Reads inline by inline and writes a dual-store Zarr (IL-chunked + XL-chunked).
 
-    参数:
-        vds_path: VDS 文件路径
-        zarr_name: 输出 Zarr 名称 (默认: {stem}.zarr)
-        connection_string: 云端连接字符串
-        channel: 数据通道
-        lod: 细节级别
+    Args:
+        vds_path: VDS file path
+        zarr_name: output Zarr name (default: {stem}.zarr)
+        connection_string: cloud connection string
+        channel: data channel
+        lod: level of detail
 
-    返回:
+    Returns:
         {zarr_path, zarr_name, il_range, xl_range, n_inlines, n_crosslines, n_samples, shape, size_mb}
     """
     import zarr
@@ -399,7 +399,7 @@ def vds_to_zarr(
 
     zarr_path = ZARR_DIR / zarr_name
 
-    logger.info("开始 VDS -> Zarr 转换: %s -> %s", vds_path, zarr_path)
+    logger.info("Starting VDS -> Zarr conversion: %s -> %s", vds_path, zarr_path)
 
     handle, manager, layout = open_vds(vds_path, connection_string)
     try:
@@ -432,7 +432,7 @@ def vds_to_zarr(
             compressors=zarr.codecs.BloscCodec(cname="lz4", clevel=3),
         )
 
-        # 逐 IL 读取并写入
+        # Read and write IL by IL
         for i in range(n_il):
             voxel_min = (0, 0, i)
             voxel_max = (n_sample, n_xl, i + 1)
@@ -444,9 +444,9 @@ def vds_to_zarr(
             amplitude_xl[:, i, :] = il_data
 
             if (i + 1) % 50 == 0:
-                logger.info("VDS->Zarr 写入进度: %d/%d IL", i + 1, n_il)
+                logger.info("VDS->Zarr write progress: %d/%d IL", i + 1, n_il)
 
-        # 元数据
+        # Metadata
         root.attrs["source_file"] = vds_path
         root.attrs["source_format"] = "vds"
         root.attrs["il_range"] = [il_coords[0], il_coords[-1]]
@@ -461,12 +461,12 @@ def vds_to_zarr(
     finally:
         close_vds(handle)
 
-    # 统计大小
+    # Size
     total_size = sum(f.stat().st_size for f in zarr_path.rglob("*") if f.is_file())
     size_mb = total_size / (1024 * 1024)
 
     logger.info(
-        "VDS->Zarr 转换完成: %s  shape=(%d,%d,%d)  size=%.1f MB",
+        "VDS->Zarr conversion done: %s  shape=(%d,%d,%d)  size=%.1f MB",
         zarr_name, n_il, n_xl, n_sample, size_mb,
     )
 

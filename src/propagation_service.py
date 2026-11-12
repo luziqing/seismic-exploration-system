@@ -1,18 +1,18 @@
 """
-跨切片传播 — 用相邻切片的 mask 自动生成下一张切片的点提示, 逐张推理并写入体 mask
+Cross-slice propagation: point prompts for the next slice come from the neighbouring slice's mask; each slice is inferred in turn and written to the volume mask
 
-传播方向 = 种子切片所在的方向:
-  inline    -> 沿 IL 轴前后逐张传播
-  crossline -> 沿 XL 轴前后逐张传播
-  timeslice -> 沿采样(纵向)轴前后逐张传播
+Propagation direction = direction of the seed slice:
+  inline    -> slice by slice both ways along the IL axis
+  crossline -> slice by slice both ways along the XL axis
+  timeslice -> slice by slice both ways along the sample (vertical) axis
 
-范围限制 (传播盒, 体素索引空间), 由三个半宽参数控制:
+Limits (propagation box, in voxel index space), set by three half-width parameters:
   max_il / max_xl / max_vertical
-  * 传播轴上:   种子索引 ± 对应半宽 (步数上限, 默认 IL/XL 为 5)
-  * 其他两轴:   种子 mask 的包围盒向外扩 对应半宽 (限制 mask 的横向/纵向外扩)
-每张切片的结果会被裁剪到传播盒内, 再写入体 mask。
+  * along the propagation axis: seed index ± its half-width (step limit, default 5 for IL/XL)
+  * on the other two axes:      seed mask bounding box grown by their half-widths (limits sideways/vertical growth)
+Each slice result is clipped to the propagation box before it is written to the volume mask.
 
-停止条件: mask 为空 / 与上一张的 IoU 低于 min_iou (防止漂移) / 到达传播盒边界。
+Stops when: the mask is empty / IoU with the previous slice is below min_iou (prevents drift) / the box edge is reached.
 """
 
 import logging
@@ -29,11 +29,11 @@ import volume_mask_service as vms
 
 logger = logging.getLogger("sam3-server")
 
-IMG_LONG_SIDE = 1024   # 送入 SAM 的图像长边 (像素)
-MAX_POINTS = 3         # 每张切片最多自动生成的正向点数
+IMG_LONG_SIDE = 1024   # long side of the image sent to SAM (pixels)
+MAX_POINTS = 3         # max positive points generated per slice
 
 
-# ── 切片读取 / 渲染 ───────────────────────────────────────────
+# ── Slice reading / rendering ────────────────────────────────
 
 def read_amp_slice(npy_dir: Path, direction: str, index: int) -> np.ndarray:
     vol = np.load(str(npy_dir / "amplitude.npy"), mmap_mode="r")
@@ -41,7 +41,7 @@ def read_amp_slice(npy_dir: Path, direction: str, index: int) -> np.ndarray:
 
 
 def render_slice_image(slice2d: np.ndarray, long_side: int = IMG_LONG_SIDE):
-    """灰度渲染 (2-98 百分位拉伸) 并等比放大到长边 long_side。返回 (PIL RGB, sy, sx)"""
+    """Grey rendering (2-98 percentile stretch), upscaled to long side long_side. Returns (PIL RGB, sy, sx)"""
     lo, hi = np.percentile(slice2d, [2, 98])
     g = (np.clip((slice2d - lo) / (hi - lo + 1e-9), 0, 1) * 255).astype(np.uint8)
     rows, cols = g.shape
@@ -50,7 +50,7 @@ def render_slice_image(slice2d: np.ndarray, long_side: int = IMG_LONG_SIDE):
     return img, float(f), float(f)
 
 
-# ── 传播盒 ────────────────────────────────────────────────────
+# ── Propagation box ───────────────────────────────────────────
 
 def _bbox2d(m: np.ndarray):
     r = np.flatnonzero(m.any(axis=1))
@@ -60,22 +60,22 @@ def _bbox2d(m: np.ndarray):
 
 def build_box(direction: str, index: int, seed: np.ndarray, vol_shape, max_il: int, max_xl: int,
               max_vertical: int) -> dict:
-    """返回体素索引空间的闭区间盒 {'il':(lo,hi),'xl':(lo,hi),'s':(lo,hi)}"""
+    """Return the closed box in voxel index space {'il':(lo,hi),'xl':(lo,hi),'s':(lo,hi)}"""
     n_il, n_xl, n_s = vol_shape
     r0, r1, c0, c1 = _bbox2d(seed)
 
     def clip(lo, hi, n):
         return (max(0, int(lo)), min(n - 1, int(hi)))
 
-    if direction == "inline":      # seed 行=sample 列=xl
+    if direction == "inline":      # seed rows=sample cols=xl
         return {"il": clip(index - max_il, index + max_il, n_il),
                 "xl": clip(c0 - max_xl, c1 + max_xl, n_xl),
                 "s": clip(r0 - max_vertical, r1 + max_vertical, n_s)}
-    if direction == "crossline":   # seed 行=sample 列=il
+    if direction == "crossline":   # seed rows=sample cols=il
         return {"il": clip(c0 - max_il, c1 + max_il, n_il),
                 "xl": clip(index - max_xl, index + max_xl, n_xl),
                 "s": clip(r0 - max_vertical, r1 + max_vertical, n_s)}
-    # timeslice: seed 行=il 列=xl
+    # timeslice: seed rows=il cols=xl
     return {"il": clip(r0 - max_il, r1 + max_il, n_il),
             "xl": clip(c0 - max_xl, c1 + max_xl, n_xl),
             "s": clip(index - max_vertical, index + max_vertical, n_s)}
@@ -86,7 +86,7 @@ def axis_range(direction: str, box: dict) -> tuple[int, int]:
 
 
 def box_mask_2d(direction: str, grid_shape, box: dict) -> np.ndarray:
-    """传播盒在某切片(切片图像朝向)上的 2D 允许区域"""
+    """2-D allowed region of the propagation box on a slice (slice-image orientation)"""
     rows, cols = grid_shape
     m = np.zeros((rows, cols), dtype=bool)
     if direction == "inline":
@@ -98,12 +98,12 @@ def box_mask_2d(direction: str, grid_shape, box: dict) -> np.ndarray:
     return m
 
 
-# ── 点提示生成 ────────────────────────────────────────────────
+# ── Point prompt generation ──────────────────────────────────
 
 def mask_to_points(mask: np.ndarray, max_points: int = MAX_POINTS) -> list[tuple[int, int]]:
     """
-    从 mask 生成正向点 (row, col): 取最大连通域, 第一个点为距离变换最大处(最内部),
-    其余点在距离变换 >= 一半峰值的像素中贪心取离已选点最远者, 保证点都落在 mask 内部。
+    Generate positive points (row, col) from the mask: take the largest connected component; the first point is at the distance-transform maximum (innermost),
+    the rest are picked greedily among pixels with distance >= half the peak, each farthest from the points already chosen, so all points lie inside the mask.
     """
     lab, n = ndimage.label(mask)
     if n == 0:
@@ -129,10 +129,10 @@ def _iou(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.count_nonzero(a & b) / u) if u else 0.0
 
 
-# ── 单张推理 ──────────────────────────────────────────────────
+# ── Single-slice inference ───────────────────────────────────
 
 def _infer_slice(npy_dir: Path, direction: str, index: int, prev_mask: np.ndarray):
-    """用 prev_mask 生成点提示, 在 index 切片上跑 SAM。返回 (原生网格 bool mask, score, 点列表)"""
+    """Build point prompts from prev_mask and run SAM on slice index. Returns (native-grid bool mask, score, points)"""
     amp = read_amp_slice(npy_dir, direction, index)
     img, sy, sx = render_slice_image(amp)
     pts_rc = mask_to_points(prev_mask)
@@ -160,34 +160,34 @@ def _infer_slice(npy_dir: Path, direction: str, index: int, prev_mask: np.ndarra
     return native, score, [{"row": r, "col": c, "label": 1} for r, c in pts_rc]
 
 
-# ── 对外入口 ──────────────────────────────────────────────────
+# ── Public entry point ────────────────────────────────────────
 
 def propagate(npy_dir: str, mask_name: str, direction: str, index: int,
               max_il: int = 5, max_xl: int = 5, max_vertical: int = 30,
               min_iou: float = 0.1) -> dict:
     """
-    以体 mask 中 (direction, index) 切片为种子, 向两侧逐张传播。
-    返回传播盒、逐张结果与体 mask 汇总。
+    Propagate both ways from the (direction, index) slice of the volume mask, used as the seed.
+    Returns the propagation box, per-slice results and the volume mask summary.
     """
     if direction not in vms.DIRECTIONS:
-        raise ValueError(f"未知方向: {direction}")
+        raise ValueError(f"Unknown direction: {direction}")
     for name, v in (("max_il", max_il), ("max_xl", max_xl), ("max_vertical", max_vertical)):
         if not isinstance(v, int) or v < 0:
-            raise ValueError(f"{name} 必须是非负整数")
+            raise ValueError(f"{name} must be a non-negative integer")
     if not 0.0 <= min_iou <= 1.0:
-        raise ValueError("min_iou 必须在 [0,1]")
+        raise ValueError("min_iou must be in [0,1]")
 
     d = Path(npy_dir)
     vol_shape = vms._vol_shape(d)
     n_axis = vms.slice_max_index(direction, vol_shape)
     if not 0 <= index < n_axis:
-        raise IndexError(f"{direction} 索引 {index} 超出范围 [0, {n_axis - 1}]")
+        raise IndexError(f"{direction} index {index} out of range [0, {n_axis - 1}]")
 
     mask_vol = vms.read_mask_volume(npy_dir, mask_name)
     seed = np.array(vms._slice_view(mask_vol, direction, index), dtype=bool)
     del mask_vol
     if not seed.any():
-        raise ValueError(f"种子切片 {direction}:{index} 在 mask '{mask_name}' 中为空, 请先对该切片运行 SAM")
+        raise ValueError(f"Seed slice {direction}:{index} is empty in mask '{mask_name}'; run SAM on this slice first")
 
     box = build_box(direction, index, seed, vol_shape, max_il, max_xl, max_vertical)
     lo, hi = axis_range(direction, box)
@@ -219,7 +219,7 @@ def propagate(npy_dir: str, mask_name: str, direction: str, index: int,
             results.append({"index": i, "side": step_dir, "voxels": vox, "score": score, "iou_prev": ov,
                             "written": True, "stopped": None})
             prev = cur
-        logger.info("传播 %s 方向 %+d 结束: %s", direction, step_dir, reason)
+        logger.info("Propagation %s direction %+d stopped: %s", direction, step_dir, reason)
 
     info = vms.get_mask_info(npy_dir, mask_name)
     written = sorted(r["index"] for r in results if r["written"])

@@ -112,7 +112,7 @@ def test_stop_on_empty_and_low_iou(vol_dir, monkeypatch):
 
 def test_empty_seed_and_bad_args(vol_dir):
     vms.write_slice_mask(str(vol_dir), "m", "inline", 3, np.zeros((40, 16), dtype=np.float32))
-    with pytest.raises(ValueError, match="为空"):
+    with pytest.raises(ValueError, match="is empty"):
         ps.propagate(str(vol_dir), "m", "inline", 15)
     _seed_inline(vol_dir)
     with pytest.raises(ValueError):

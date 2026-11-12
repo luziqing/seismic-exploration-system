@@ -1,5 +1,5 @@
 // storage.js — localStorage backup/restore
-// ── localStorage 备份 (防崩溃丢失拾取数据) ─────────────
+// ── localStorage backup (keeps picks safe after a crash) ─────────────
 const LS_KEY = 'sam3_picks_backup';
 const LS_VERSION = 2;
 
@@ -35,7 +35,7 @@ function saveToLocalStorage() {
         localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
         updateBackupStatus();
     } catch (e) {
-        console.warn('localStorage 备份失败:', e);
+        console.warn('localStorage backup failed:', e);
     }
 }
 
@@ -63,7 +63,7 @@ function restoreFromBackup(snap) {
         if (!Array.isArray(pts) || pts.length === 0) return;
         picksBySlice.set(key, pts.map(p => ({
             ...p,
-            // 兼容旧数据: 若无归一化坐标则用 snap 中的 canvas 尺寸反算
+            // Old data: without normalised coordinates, derive them from the canvas size in snap
             nx: p.nx != null ? p.nx : (snap.canvasW ? p.x / snap.canvasW : null),
             ny: p.ny != null ? p.ny : (snap.canvasH ? p.y / snap.canvasH : null),
             sliceKey: key,
@@ -72,8 +72,8 @@ function restoreFromBackup(snap) {
     if (snap.yAxisUnit) yAxisUnit = snap.yAxisUnit;
     if (snap.velocity) velocity = snap.velocity;
     const total = [...picksBySlice.values()].reduce((s, a) => s + a.length, 0);
-    setStatus('ready', `已恢复 ${total} 个拾取点`);
-    // 恢复浏览位置 (如果卷已加载)
+    setStatus('ready', `Restored ${total} picks`);
+    // Restore the browse position (if the volume is loaded)
     if (volInfo.name && snap.curDir) {
         curDir = snap.curDir;
         curIndex = snap.curIndex || 0;
@@ -91,13 +91,13 @@ function restoreFromBackup(snap) {
 function showRecoveryDialog(backup) {
     const snap = backup.snapshot;
     const ageMin = Math.floor((Date.now() - (snap.timestamp || 0)) / 60000);
-    const volLabel = snap.volName || '未知';
-    const ageLabel = ageMin > 0 ? ageMin + ' 分钟前' : '刚刚';
-    const msg = `发现未保存的拾取数据:\n\n` +
-        `卷: ${volLabel}\n` +
-        `点数: ${backup.total}\n` +
-        `时间: ${ageLabel}\n\n` +
-        `是否恢复？`;
+    const volLabel = snap.volName || 'unknown';
+    const ageLabel = ageMin > 0 ? ageMin + ' min ago' : 'just now';
+    const msg = `Found unsaved picks:\n\n` +
+        `Volume: ${volLabel}\n` +
+        `Points: ${backup.total}\n` +
+        `Time: ${ageLabel}\n\n` +
+        `Restore them?`;
     if (confirm(msg)) {
         restoreFromBackup(snap);
     } else {
@@ -116,11 +116,11 @@ function updateBackupStatus() {
             .reduce((s, arr) => s + (Array.isArray(arr) ? arr.length : 0), 0);
         if (total === 0) { el.textContent = ''; return; }
         const age = Date.now() - (snap.timestamp || 0);
-        const ageStr = age < 60000 ? '刚刚'
-                     : age < 3600000 ? Math.floor(age / 60000) + '分钟前'
-                     : Math.floor(age / 3600000) + '小时前';
+        const ageStr = age < 60000 ? 'just now'
+                     : age < 3600000 ? Math.floor(age / 60000) + ' min ago'
+                     : Math.floor(age / 3600000) + ' h ago';
         const vol = snap.volName ? ` [${snap.volName}]` : '';
-        el.textContent = `💾 ${total} 点${vol} · ${ageStr}`;
+        el.textContent = `💾 ${total} pts${vol} · ${ageStr}`;
     } catch { el.textContent = ''; }
 }
 

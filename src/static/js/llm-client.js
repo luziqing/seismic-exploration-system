@@ -1,9 +1,9 @@
 /**
- * llm-client.js -- AI 助手聊天侧边栏, SSE 流式对话, 多模型配置
- * 加载顺序: 在 sam-client.js 之后 (最后加载)
+ * llm-client.js -- AI assistant chat sidebar, SSE streaming chat, multi-provider settings
+ * Load order: after sam-client.js (loaded last)
  */
 
-// ── 全局状态 ──────────────────────────────────────────────
+// ── Global state ──────────────────────────────────────────────
 let chatMessages = [];
 let chatStreaming = false;
 let chatAbortController = null;
@@ -14,30 +14,30 @@ let chatMessagesEl = null;
 let chatInputEl = null;
 let chatLoadingEl = null;
 
-// ── 侧边栏 DOM 创建 ────────────────────────────────────────
+// ── Sidebar DOM ────────────────────────────────────────
 
 function createChatSidebar() {
     const sidebar = document.createElement('div');
     sidebar.id = 'chatSidebar';
 
-    // 头部
+    // Header
     const header = document.createElement('div');
     header.className = 'chat-header';
     header.innerHTML =
-        '<span>💬 AI 助手</span>' +
+        '<span>AI assistant</span>' +
         '<span class="chat-spacer"></span>' +
-        '<span class="chat-config-icon" id="chatConfigBtn" title="设置">⚙️</span>' +
-        '<span class="chat-close-icon" id="chatCloseBtn" title="关闭">✕</span>';
+        '<span class="chat-config-icon" id="chatConfigBtn" title="Settings">⚙️</span>' +
+        '<span class="chat-close-icon" id="chatCloseBtn" title="Close">✕</span>';
     sidebar.appendChild(header);
 
-    // 消息区域
+    // Messages
     const messagesDiv = document.createElement('div');
     messagesDiv.className = 'chat-messages';
     messagesDiv.id = 'chatMessages';
     sidebar.appendChild(messagesDiv);
     chatMessagesEl = messagesDiv;
 
-    // 加载动画
+    // Loading animation
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'chat-loading';
     loadingDiv.id = 'chatLoading';
@@ -48,17 +48,17 @@ function createChatSidebar() {
     sidebar.appendChild(loadingDiv);
     chatLoadingEl = loadingDiv;
 
-    // 输入区域
+    // Input area
     const inputArea = document.createElement('div');
     inputArea.className = 'chat-input-area';
     const textarea = document.createElement('textarea');
     textarea.id = 'chatInput';
-    textarea.placeholder = '输入消息 (Enter 发送, Shift+Enter 换行)';
+    textarea.placeholder = 'Type a message (Enter to send, Shift+Enter for a new line)';
     textarea.rows = 2;
     chatInputEl = textarea;
 
     const sendBtn = document.createElement('button');
-    sendBtn.textContent = '发送';
+    sendBtn.textContent = 'Send';
     sendBtn.id = 'chatSendBtn';
 
     inputArea.appendChild(textarea);
@@ -68,7 +68,7 @@ function createChatSidebar() {
     document.body.appendChild(sidebar);
     chatSidebarEl = sidebar;
 
-    // ── 事件绑定 ──────────────────────────────────────────
+    // ── Event wiring ──────────────────────────────────────────
     document.getElementById('chatConfigBtn').onclick = showLLMConfigModal;
     document.getElementById('chatCloseBtn').onclick = toggleChatSidebar;
     sendBtn.onclick = sendChatMessage;
@@ -80,7 +80,7 @@ function createChatSidebar() {
     };
 }
 
-// ── 消息渲染 ──────────────────────────────────────────────
+// ── Message rendering ──────────────────────────────────────────────
 
 function appendMessage(role, content) {
     const msgDiv = document.createElement('div');
@@ -103,7 +103,7 @@ function setChatLoading(show) {
     }
 }
 
-// ── 核心 SSE 流式逻辑 ──────────────────────────────────────
+// ── SSE streaming core ──────────────────────────────────────
 
 async function sendChatMessage() {
     const text = chatInputEl.value.trim();
@@ -161,14 +161,14 @@ async function sendChatMessage() {
                             msgEl.textContent = '❌ ' + fullContent;
                         }
                     } catch (e) {
-                        // 跳过无法解析的 JSON
+                        // skip JSON that does not parse
                     }
                 }
             }
         }
     } catch (err) {
         if (err.name !== 'AbortError') {
-            msgEl.textContent = '❌ 连接失败: ' + err.message;
+            msgEl.textContent = '❌ Connection failed: ' + err.message;
             fullContent = msgEl.textContent;
         }
     } finally {
@@ -178,22 +178,22 @@ async function sendChatMessage() {
         if (fullContent && !fullContent.startsWith('❌')) {
             chatMessages.push({ role: 'assistant', content: fullContent });
         } else if (!fullContent) {
-            chatMessages.push({ role: 'assistant', content: '(空响应)' });
-            msgEl.textContent = '(空响应)';
+            chatMessages.push({ role: 'assistant', content: '(empty response)' });
+            msgEl.textContent = '(empty response)';
         }
     }
 }
 
-// ── 侧边栏控制 ────────────────────────────────────────────
+// ── Sidebar toggle ────────────────────────────────────────────
 
 function toggleChatSidebar() {
     chatSidebarVisible = !chatSidebarVisible;
     if (chatSidebarVisible) {
         chatSidebarEl.style.display = 'flex';
-        // 调整主容器让出空间
+        // Make room in the main container
         const mainContainer = document.querySelector('.main-container');
         if (mainContainer) mainContainer.style.marginRight = '380px';
-        // 调整切片面板
+        // Shift the slice panel too
         const slicePanel = document.getElementById('slicePanel');
         if (slicePanel) slicePanel.style.marginRight = '380px';
         chatInputEl.focus();
@@ -204,7 +204,7 @@ function toggleChatSidebar() {
         const slicePanel = document.getElementById('slicePanel');
         if (slicePanel) slicePanel.style.marginRight = '';
     }
-    // 触发画布 resize
+    // Trigger a canvas resize
     window.dispatchEvent(new Event('resize'));
 }
 
@@ -213,29 +213,29 @@ function clearChat() {
     if (chatMessagesEl) chatMessagesEl.innerHTML = '';
 }
 
-// ── VLM 切片智能解读 ─────────────────────────────────────
+// ── VLM slice interpretation ─────────────────────────────────────
 
 function captureCanvasComposite() {
     const canvas = document.getElementById('seismicCanvas');
     if (!canvas) return null;
-    return canvas.toDataURL('image/png').split(',')[1];  // 去掉 data:image/png;base64, 前缀
+    return canvas.toDataURL('image/png').split(',')[1];  // strip the data:image/png;base64, prefix
 }
 
 function buildSliceContext() {
     const ctx = {
         direction: typeof curDir !== 'undefined' ? curDir : 'inline',
         line_index: typeof curIndex !== 'undefined' ? curIndex : 0,
-        volume_name: (typeof volInfo !== 'undefined' && volInfo.name) ? volInfo.name : '未加载',
+        volume_name: (typeof volInfo !== 'undefined' && volInfo.name) ? volInfo.name : 'not loaded',
         coords: {},
         y_unit: (typeof yAxisUnit !== 'undefined' && yAxisUnit === 'depth') ? 'Depth (m)' : 'Time (ms)',
     };
 
-    // 方向中文名
+    // Direction short names
     const dirLabels = { inline: 'IL', crossline: 'XL', timeslice: 'TS' };
     const dirLabel = dirLabels[ctx.direction] || '';
 
     if (ctx.direction === 'timeslice') {
-        // TimeSlice: X=Crossline, Y=Inline, 固定时间/深度
+        // TimeSlice: X=Crossline, Y=Inline, fixed time/depth
         ctx.line_label = `TS ${ctx.line_index}`;
         ctx.coords = {
             x_min: typeof volInfo !== 'undefined' ? volInfo.xlMin : 0,
@@ -245,7 +245,7 @@ function buildSliceContext() {
             y_max: typeof volInfo !== 'undefined' ? volInfo.ilMax : 0,
             y_label: 'IL',
         };
-        // 计算当前时间层位
+        // Time of the current slice
         if (typeof volInfo !== 'undefined' && volInfo.dtUs && volInfo.tsCount) {
             const totalTime = volInfo.tsCount * volInfo.dtUs / 1000;
             const frac = ctx.line_index / Math.max(1, volInfo.tsCount - 1);
@@ -264,7 +264,7 @@ function buildSliceContext() {
         };
     }
 
-    // 拾取点统计
+    // Pick counts
     const allPicks = typeof picksBySlice !== 'undefined' ? picksBySlice : new Map();
     let nInclude = 0, nExclude = 0;
     for (const pts of allPicks.values()) {
@@ -275,7 +275,7 @@ function buildSliceContext() {
     }
     ctx.picks = { include: nInclude, exclude: nExclude };
 
-    // SAM3 结果
+    // SAM3 result
     if (typeof logitsMap !== 'undefined' && logitsMap) {
         const totalPx = (typeof logitsWidth !== 'undefined' ? logitsWidth : 1) *
                         (typeof logitsHeight !== 'undefined' ? logitsHeight : 1);
@@ -283,7 +283,7 @@ function buildSliceContext() {
         for (let i = 0; i < logitsMap.length; i++) {
             if (logitsMap[i] > 0.3) positivePx++;
         }
-        // 尝试从全局获取最后一次 SAM score
+        // Last SAM score from the global, if any
         let samScore = 0;
         if (typeof window._lastSamScore !== 'undefined') samScore = window._lastSamScore;
         ctx.sam_mask = {
@@ -301,29 +301,29 @@ async function analyzeSlice() {
     const imageBase64 = captureCanvasComposite();
     if (!imageBase64) {
         if (chatMessagesEl) {
-            appendMessage('assistant', '❌ 无法截取画布，请先加载数据。');
+            appendMessage('assistant', '❌ Cannot capture the canvas. Load data first.');
         }
         return;
     }
 
     const context = buildSliceContext();
 
-    // 确保侧边栏打开
+    // Make sure the sidebar is open
     if (!chatSidebarVisible) toggleChatSidebar();
 
-    // 添加系统提示消息
-    const dirNames = { inline: 'Inline 剖面', crossline: 'Crossline 剖面', timeslice: 'TimeSlice 水平切片' };
+    // Add a context message
+    const dirNames = { inline: 'Inline section', crossline: 'Crossline section', timeslice: 'Time slice' };
     const contextSummary = [
-        `📷 **AI 切片解读 — ${dirNames[context.direction] || context.direction}**`,
-        `数据体: ${context.volume_name}`,
+        `**AI slice reading — ${dirNames[context.direction] || context.direction}**`,
+        `Volume: ${context.volume_name}`,
         `${context.line_label}  |  X: ${context.coords.x_min}~${context.coords.x_max} (${context.coords.x_label})  |  Y: ${context.coords.y_min}~${context.coords.y_max} (${context.coords.y_label})`,
     ];
     if (context.time_at_slice !== undefined) {
-        contextSummary[contextSummary.length - 1] += `  |  时间层位: ~${context.time_at_slice}ms`;
+        contextSummary[contextSummary.length - 1] += `  |  Slice time: ~${context.time_at_slice}ms`;
     }
-    contextSummary.push(`拾取点: Include ${context.picks.include} 个 / Exclude ${context.picks.exclude} 个`);
+    contextSummary.push(`Picks: Include ${context.picks.include} / Exclude ${context.picks.exclude}`);
     if (context.sam_mask && context.sam_mask.score > 0) {
-        contextSummary.push(`SAM3 分割: 置信度 ${context.sam_mask.score.toFixed(4)}, 面积 ${context.sam_mask.area_pct}%`);
+        contextSummary.push(`SAM3 mask: score ${context.sam_mask.score.toFixed(4)}, area ${context.sam_mask.area_pct}%`);
     }
     appendMessage('assistant', contextSummary.join('\n'));
     chatMessages.push({ role: 'assistant', content: contextSummary.join('\n') });
@@ -380,7 +380,7 @@ async function analyzeSlice() {
         }
     } catch (err) {
         if (err.name !== 'AbortError') {
-            msgEl.textContent = '❌ 分析失败: ' + err.message;
+            msgEl.textContent = '❌ Analysis failed: ' + err.message;
             fullContent = msgEl.textContent;
         }
     } finally {
@@ -390,12 +390,12 @@ async function analyzeSlice() {
         if (fullContent && !fullContent.startsWith('❌')) {
             chatMessages.push({ role: 'assistant', content: fullContent });
         } else if (!fullContent) {
-            msgEl.textContent = '(无响应 — 可能模型不支持视觉输入，请使用 Claude/GPT-4o 等多模态模型)';
+            msgEl.textContent = '(No response. The model may not accept images; use a multimodal model such as Claude or GPT-4o.)';
         }
     }
 }
 
-// ── 配置弹窗 ──────────────────────────────────────────────
+// ── Settings modal ──────────────────────────────────────────────
 
 async function showLLMConfigModal() {
     const modal = document.getElementById('llmConfigModal');
@@ -407,7 +407,7 @@ async function showLLMConfigModal() {
     const localUrlRow = document.getElementById('providerLocalUrlRow');
     const statusEl = document.getElementById('llmConnectionStatus');
 
-    // 获取当前配置
+    // Fetch the current settings
     try {
         const resp = await fetch('/api/llm/config');
         if (resp.ok) llmConfigCache = await resp.json();
@@ -415,21 +415,21 @@ async function showLLMConfigModal() {
         console.warn('Failed to load LLM config:', e);
     }
 
-    // 填充表单
+    // Fill the form
     if (llmConfigCache) {
         providerSel.value = llmConfigCache.provider || 'local';
         modelInput.value = llmConfigCache.model || '';
         localUrlInput.value = llmConfigCache.local_url || 'http://localhost:11434/v1';
         systemPromptTa.value = llmConfigCache.system_prompt || '';
-        apiKeyInput.value = '';  // 不填充（脱敏值不可用）
+        apiKeyInput.value = '';  // left empty (the masked value cannot be reused)
     }
 
-    // provider 切换联动
+    // React to provider changes
     function updateProviderUI() {
         const prov = providerSel.value;
         localUrlRow.style.display = (prov === 'local') ? 'flex' : 'none';
         if (llmConfigCache && llmConfigCache.provider !== prov) {
-            // 切换 provider 时使用默认模型
+            // Use the default model when the provider changes
             const defaults = {
                 'anthropic': 'claude-sonnet-4-20250514',
                 'openai': 'gpt-4o',
@@ -445,35 +445,35 @@ async function showLLMConfigModal() {
     statusEl.style.display = 'none';
     modal.style.display = 'flex';
 
-    // 关闭按钮
+    // Close button
     document.getElementById('llmConfigClose').onclick = function() {
         modal.style.display = 'none';
     };
 
-    // 取消
+    // Cancel
     document.getElementById('llmConfigCancel').onclick = function() {
         modal.style.display = 'none';
     };
 
-    // 测试连接
+    // Test connection
     document.getElementById('llmConfigTest').onclick = async function() {
         statusEl.style.display = 'block';
         statusEl.className = 'connection-status testing';
-        statusEl.textContent = '⏳ 正在测试连接...';
+        statusEl.textContent = '⏳ Testing connection...';
 
         try {
             const testResp = await fetch('/api/llm/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    messages: [{ role: 'user', content: '你好，请回复"连接成功"两个字。' }],
+                    messages: [{ role: 'user', content: 'Hello, please reply with the word "connected".' }],
                 }),
             });
             if (!testResp.ok) {
                 const errText = await testResp.text();
                 throw new Error('HTTP ' + testResp.status + ': ' + errText);
             }
-            // 读取完整流式响应
+            // Read the whole streamed response
             const reader = testResp.body.getReader();
             const decoder = new TextDecoder();
             let fullText = '';
@@ -497,14 +497,14 @@ async function showLLMConfigModal() {
                 }
             }
             statusEl.className = 'connection-status success';
-            statusEl.textContent = '✅ 连接成功！模型回复: ' + (fullText.slice(0, 100) || '(空)');
+            statusEl.textContent = '✅ Connected. Model reply: ' + (fullText.slice(0, 100) || '(empty)');
         } catch (e) {
             statusEl.className = 'connection-status error';
-            statusEl.textContent = '❌ 连接失败: ' + e.message;
+            statusEl.textContent = '❌ Connection failed: ' + e.message;
         }
     };
 
-    // 保存
+    // Save
     document.getElementById('llmConfigSave').onclick = async function() {
         const config = {
             provider: providerSel.value,
@@ -521,27 +521,27 @@ async function showLLMConfigModal() {
             });
             if (!resp.ok) {
                 const err = await resp.json();
-                throw new Error(err.detail || '保存失败');
+                throw new Error(err.detail || 'Save failed');
             }
             llmConfigCache = await resp.json();
             modal.style.display = 'none';
         } catch (e) {
-            alert('配置保存失败: ' + e.message);
+            alert('Saving settings failed: ' + e.message);
         }
     };
 
-    // 点击遮罩关闭
+    // Click on the overlay closes the modal
     modal.onclick = function(e) {
         if (e.target === modal) modal.style.display = 'none';
     };
 }
 
-// ── 初始化 ─────────────────────────────────────────────────
+// ── Init ─────────────────────────────────────────────────
 
 function initLLMChat() {
     createChatSidebar();
 
-    // 在工具栏添加切换按钮
+    // Add the toggle buttons (into the More menu if present, else the toolbar)
     const toolbar = document.querySelector('.toolbar');
     if (!toolbar) { setTimeout(initLLMChat, 200); return; }
 
@@ -552,7 +552,7 @@ function initLLMChat() {
     const btn = document.createElement('button');
     btn.className = 'action-btn';
     btn.id = 'btnAIChat';
-    btn.textContent = '💬 AI 助手';
+    btn.textContent = 'AI assistant';
     btn.style.fontWeight = 'bold';
     btn.style.color = '#000080';
     btn.onclick = toggleChatSidebar;
@@ -560,15 +560,19 @@ function initLLMChat() {
     const analyzeBtn = document.createElement('button');
     analyzeBtn.className = 'action-btn';
     analyzeBtn.id = 'btnAIAnalyze';
-    analyzeBtn.textContent = '🔍 AI 分析';
+    analyzeBtn.textContent = 'AI analyse';
     analyzeBtn.style.fontWeight = 'bold';
     analyzeBtn.style.color = '#880088';
-    analyzeBtn.title = 'AI 智能解读当前切片（拾取点+SAM3分割+地质特征）';
+    analyzeBtn.title = 'AI reading of the current slice (picks + SAM3 mask + geology)';
     analyzeBtn.onclick = analyzeSlice;
 
-    // 插入到状态指示器之前
+    // Into the More menu when the page has one (scope S8), else before the status indicator
+    const aiRow = document.getElementById('moreAIRow');
     const statusSpan = document.getElementById('statusIndicator');
-    if (statusSpan && statusSpan.parentNode) {
+    if (aiRow) {
+        aiRow.appendChild(btn);
+        aiRow.appendChild(analyzeBtn);
+    } else if (statusSpan && statusSpan.parentNode === toolbar) {
         toolbar.insertBefore(separator, statusSpan);
         toolbar.insertBefore(btn, separator);
         const sep2 = document.createElement('span');
@@ -583,7 +587,7 @@ function initLLMChat() {
     }
 }
 
-// ── 页面加载时初始化 ────────────────────────────────────────
+// ── Init on page load ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(initLLMChat, 300);  // 延迟确保 toolbar 已渲染
+    setTimeout(initLLMChat, 300);  // delay so the toolbar is rendered
 });

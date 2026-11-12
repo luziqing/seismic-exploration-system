@@ -1,13 +1,13 @@
 // sam-client.js — SAM3 embedding, inference, mask export
 
 // ═══════════════════════════════════════════════════════
-// SAM 嵌入 & 推理
+// SAM embedding & inference
 // ═══════════════════════════════════════════════════════
 
 async function computeEmbedding() {
     try {
-        setStatus('loading', '计算嵌入中...');
-        // 用 canvas 当前内容生成 blob (支持任意来源的图片)
+        setStatus('loading', 'Computing embedding...');
+        // Build the blob from the current canvas content (works for images from any source)
         const tempC = document.createElement('canvas');
         tempC.width = seismicImage.naturalWidth || canvas.width;
         tempC.height = seismicImage.naturalHeight || canvas.height;
@@ -16,29 +16,29 @@ async function computeEmbedding() {
         const form = new FormData();
         form.append('file', blob, 'slice.png');
         const resp = await fetch('/api/embed', {method:'POST', body:form});
-        if (!resp.ok) throw new Error((await resp.json()).detail);
+        if (!resp.ok) throw await respError(resp);
         const data = await resp.json();
         embeddingId = data.embedding_id;
         embeddingImageSize = data.image_size;
-        setStatus('ready', 'SAM3 就绪');
+        setStatus('ready', 'SAM3 ready');
     } catch(e) {
-        setStatus('error', '嵌入失败: ' + e.message);
+        setStatus('error', 'Embedding failed: ' + errText(e));
     }
 }
 
 // ═══════════════════════════════════════════════════════
-// SAM 推理
+// SAM inference
 // ═══════════════════════════════════════════════════════
 
 async function runSAMInference() {
-    if (!samEnabled) { setStatus('error', 'SAM 模式未启用'); return; }
-    if (isInferring) { setStatus('loading', '⏳ SAM 推理进行中，请等待...'); return; }
+    if (!samEnabled) { setStatus('error', 'SAM mode is not enabled'); return; }
+    if (isInferring) { setStatus('loading', 'SAM is already running, please wait...'); return; }
 
-    // 获取当前切片的拾取点
+    // Get the picks of the current slice
     const curKey = currentSliceKey();
     const picks = picksBySlice.get(curKey) || [];
     if (picks.length === 0) {
-        setStatus('error', '请先拾取 Include/Exclude 点');
+        setStatus('error', 'Pick Include/Exclude points first');
         return;
     }
 
@@ -51,7 +51,7 @@ async function runSAMInference() {
             if (!picks.some(p => p.label === 1)) throw new Error('add at least one Include point on the target');
             await runRefine(picks);
         } catch (e) {
-            setStatus('error', 'SAM refine failed: ' + e.message);
+            setStatus('error', 'SAM refine failed: ' + errText(e));
         } finally { isInferring = false; }
         return;
     }
@@ -62,7 +62,7 @@ async function runSAMInference() {
         //    embedding never contains pick markers, overlays or the display colour map (bug B1).
         //    Other sources: embed the clean seismic rendering (seismicImageData), never the live canvas.
         if (!embeddingId) {
-            setStatus('loading', '📐 Encoding slice for SAM...');
+            setStatus('loading', encodingStatus());
             let resp;
             if (volInfo.source === 'api/npy' && volInfo.name) {
                 resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/embed`, {
@@ -81,7 +81,7 @@ async function runSAMInference() {
                 form.append('file', blob, 'slice.png');
                 resp = await fetch('/api/embed', {method:'POST', body:form});
             }
-            if (!resp.ok) throw new Error((await resp.json()).detail);
+            if (!resp.ok) throw await respError(resp);
             const data = await resp.json();
             embeddingId = data.embedding_id;
             embeddingImageSize = data.image_size;   // [w, h] of the embedded image
@@ -97,26 +97,26 @@ async function runSAMInference() {
         });
         const labels = picks.map(p => p.label);
 
-        setStatus('loading', `🧠 推理中 (${picks.length} 点)...`);
+        setStatus('loading', `Running inference (${picks.length} points)...`);
 
-        // 3. 调用后端 predict
+        // 3. Call the backend predict
         const resp = await fetch('/api/predict', {
             method:'POST', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({embedding_id:embeddingId, points, labels})
         });
-        if (!resp.ok) throw new Error((await resp.json()).detail);
+        if (!resp.ok) throw await respError(resp);
         const result = await resp.json();
 
-        // 4. 存储 logits
-        setStatus('loading', '🎨 渲染分割结果...');
+        // 4. Store the logits
+        setStatus('loading', 'Rendering segmentation...');
         logitsHeight = result.mask_shape[0];
         logitsWidth = result.mask_shape[1];
         logitsMap = new Float32Array(result.mask.flat());
-        window._lastSamScore = result.scores[0] || 0;  // 供 AI 分析读取
+        window._lastSamScore = result.scores[0] || 0;  // read by the AI analysis
         drawSeismic();
 
-        // 5. 保存结果到数据库
-        setStatus('loading', '💾 保存结果...');
+        // 5. Save the result to the database
+        setStatus('loading', 'Saving result...');
         if (currentSessionId) {
             await fetch(`/api/db/session/${currentSessionId}/sam_result`, {
                 method:'POST',
@@ -124,7 +124,7 @@ async function runSAMInference() {
                 body: JSON.stringify({mask_path:'', score:result.scores[0], mask_shape:result.mask_shape})
             });
         }
-        // 6. 回映射到三维体 mask (仅 NPY 卷): 切片 mask -> 体素
+        // 6. Map back to the 3D volume mask (NPY volumes only): slice mask -> voxels
         let volNote = '';
         if (volInfo.source === 'api/npy' && volInfo.name) {
             try {
@@ -138,197 +138,295 @@ async function runSAMInference() {
                 });
                 if (vr.ok) {
                     const v = await vr.json();
-                    volNote = ` · 体素 ${v.total_voxels} (${v.slices_written} 切片)`;
+                    volNote = ` · Voxels ${v.total_voxels} (${v.slices_written} slices)`;
                     if (typeof refreshSurveyFootprint === 'function') refreshSurveyFootprint();
                 } else {
-                    volNote = ' · 体 mask 写入失败';
+                    volNote = ' · Volume mask write failed';
                 }
-            } catch (e) { volNote = ' · 体 mask 写入失败'; }
+            } catch (e) { volNote = ' · Volume mask write failed'; }
         }
-        setStatus('ready', `✅ SAM 完成${volNote} · Score: ${result.scores[0].toFixed(3)} · ${picks.length} 点`);
+        setStatus('ready', `SAM done${volNote} · Score: ${result.scores[0].toFixed(3)} · ${picks.length} points`);
     } catch(e) {
-        setStatus('error', '推理失败: ' + e.message);
+        setStatus('error', 'Inference failed: ' + errText(e));
     } finally { isInferring = false; }
 }
 
 // ═══════════════════════════════════════════════════════
-// Mask 导出 (GeoJSON + CSV 多边形)
+// Mask export (GeoJSON + CSV polygons + QC round log)
 // ═══════════════════════════════════════════════════════
 
+// Polygon vertices sit on pixel corners, so the rings cover exactly the mask pixels shown on the
+// canvas. Corner c of an axis with n pixels maps to the same value the on-screen axis shows at that
+// position: min + c / n * (max - min) (see updateAxes() in sgy-client.js).
 function exportMaskAsContour() {
     if (!logitsMap || !logitsWidth || !logitsHeight) {
-        setStatus('error', '请先运行 SAM 推理生成 mask');
+        setStatus('error', 'Run SAM first to create a mask');
         return;
     }
 
-    // 从 logits 提取二值轮廓 (阈值 0.5)
-    setStatus('loading', '📐 提取轮廓中...');
+    setStatus('loading', 'Extracting contours...');
     const threshold = 0.5;
-    const contours = extractContours(logitsMap, logitsWidth, logitsHeight, threshold);
-    if (contours.length === 0) {
-        setStatus('error', 'mask 未检测到有效轮廓');
+    const W = logitsWidth, H = logitsHeight;
+    const bin = new Uint8Array(W * H);
+    let maskPixels = 0;
+    for (let i = 0; i < W * H; i++) { bin[i] = logitsMap[i] >= threshold ? 1 : 0; maskPixels += bin[i]; }
+    const polygons = extractContours(bin, W, H);
+    if (polygons.length === 0) {
+        setStatus('error', 'No valid contour found in the mask');
         return;
     }
 
-    // 将像素坐标转换为 IL/XL 坐标
-    setStatus('loading', '🔄 转换坐标并生成 GeoJSON...');
-    let geoContours;
+    // The canvas shows the selected QC round unless another mask replaced it since.
+    const run = (typeof refineRun !== 'undefined' && refineRun && refineSliceKey === currentSliceKey()) ? refineRun : null;
+    const round = run ? run.rounds[refineSelected - 1] : null;
+    const fromRound = !!round && maskEqualsRound(bin, W, H, round, run.grid_shape);
+
+    // Pixel-corner coordinates -> IL / XL / vertical axis, in the units of the displayed axes
+    const dtMs = (volInfo.dtUs || 1000) / 1000;
+    const yName = curDir === 'timeslice'
+        ? (yAxisUnit === 'depth' ? 'Depth (m)' : 'Time (ms)')
+        : COORD.yLabel;
+    const sliceY = yAxisUnit === 'depth' ? curIndex * dtMs * velocity / 2 / 1000 : curIndex * dtMs;
+    const toAxes = ([cx, cy]) => {
+        const xPct = cx / W, yPct = cy / H;
+        let il, xl, y;
+        if (curDir === 'inline') {
+            xl = COORD.crossMin + xPct * (COORD.crossMax - COORD.crossMin);
+            il = volInfo.ilMin + curIndex;
+            y = COORD.yTop + yPct * COORD.yRange;
+        } else if (curDir === 'crossline') {
+            il = COORD.crossMin + xPct * (COORD.crossMax - COORD.crossMin);
+            xl = volInfo.xlMin + curIndex;
+            y = COORD.yTop + yPct * COORD.yRange;
+        } else {
+            xl = COORD.crossMin + xPct * (COORD.crossMax - COORD.crossMin);
+            il = volInfo.ilMin + yPct * (volInfo.ilMax - volInfo.ilMin);
+            y = sliceY;
+        }
+        return { il: +il.toFixed(3), xl: +xl.toFixed(3), y: +y.toFixed(3) };
+    };
+    let geoPolygons;
     try {
-        geoContours = contours.map(ring => ring.map(([px, py]) => {
-            const xPct = px / logitsWidth;
-            const yPct = py / logitsHeight;
-            let il, xl;
-            if (curDir === 'inline') {
-                xl = COORD.crossMin + xPct * (COORD.crossMax - COORD.crossMin);
-                il = volInfo.ilMin + curIndex;
-            } else if (curDir === 'crossline') {
-                il = COORD.crossMin + xPct * (COORD.crossMax - COORD.crossMin);
-                xl = volInfo.xlMin + curIndex;
-            } else {
-                xl = COORD.crossMin + xPct * (COORD.crossMax - COORD.crossMin);
-                il = volInfo.ilMin + yPct * (volInfo.ilMax - volInfo.ilMin);
-            }
-            const depth = curDir === 'timeslice'
-                ? curIndex
-                : (COORD.yTop + yPct * COORD.yRange);
-            return { il: +il.toFixed(2), xl: +xl.toFixed(2), depth: +depth.toFixed(2) };
-        }));
+        geoPolygons = polygons.map(rings => rings.map(ring => ring.map(toAxes)));
     } catch (e) {
-        setStatus('error', '坐标转换失败: ' + e.message);
+        setStatus('error', 'Coordinate conversion failed: ' + e.message);
         return;
     }
 
-    // 构建 GeoJSON FeatureCollection
-    const features = geoContours.map((ring, i) => ({
+    setStatus('loading', 'Building GeoJSON...');
+    const sliceKey = currentSliceKey();
+    const features = geoPolygons.map((rings, i) => ({
         type: 'Feature',
         properties: {
             id: i,
-            slice_key: currentSliceKey(),
+            slice_key: sliceKey,
             direction: curDir,
             index: curIndex,
-            area_pixels: contourArea(ring),
+            area_pixels: polygonAreaPixels(polygons[i]),
+            holes: rings.length - 1,
         },
         geometry: {
             type: 'Polygon',
-            coordinates: [ring.map(p => [p.il, p.xl, p.depth])],
+            coordinates: rings.map(ring => ring.map(p => [p.il, p.xl, p.y])),
         }
     }));
-    const geojson = {
-        type: 'FeatureCollection',
-        properties: {
-            volume: volInfo.name,
-            source: 'SAM3',
-            threshold: threshold,
-            timestamp: new Date().toISOString(),
-        },
-        features,
+    const props = {
+        volume: volInfo.name,
+        source: fromRound ? 'SAM3 + QC refine' : 'SAM3',
+        direction: curDir,
+        index: curIndex,
+        coordinate_order: ['inline', 'crossline', yName],
+        grid_shape: [H, W],
+        mask_pixels: maskPixels,
+        threshold: threshold,
+        timestamp: new Date().toISOString(),
     };
+    if (fromRound) { props.run_id = run.run_id; props.round = round.round; }
+    const geojson = { type: 'FeatureCollection', properties: props, features };
 
-    // 导出 GeoJSON
-    setStatus('loading', '📦 生成下载文件...');
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], {type: 'application/geo+json'});
+    setStatus('loading', 'Preparing download files...');
+    const base = `${volInfo.name || 'unknown'}_${sliceKey.replace(':', '')}`;
+    downloadText(JSON.stringify(geojson, null, 2), 'application/geo+json', `sam_mask_${base}.geojson`);
+
+    // CSV: one row per ring vertex; Ring 0 = outer boundary, 1.. = holes
+    const yCol = yName.startsWith('Depth') ? 'Depth_m' : 'Time_ms';
+    let csv = `ContourID,Ring,Inline,Crossline,${yCol},Direction\n`;
+    geoPolygons.forEach((rings, i) => rings.forEach((ring, k) => ring.forEach(p => {
+        csv += `${i},${k},${p.il},${p.xl},${p.y},${curDir}\n`;
+    })));
+    downloadText(csv, 'text/csv', `sam_mask_${base}.csv`);
+
+    let note = '';
+    if (run) {
+        downloadText(JSON.stringify(buildQcLog(run), null, 2), 'application/json',
+                     `qc_log_${run.volume}_${run.direction}${run.index}.json`);
+        note = ' + QC log';
+    }
+    setStatus('ready', `Exported ${polygons.length} polygon(s), ${maskPixels} px (GeoJSON + CSV${note})` +
+                       (fromRound ? ` · QC round ${round.round}` : ''));
+}
+
+function downloadText(text, type, filename) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `sam_mask_${volInfo.name || 'unknown'}_${currentSliceKey().replace(':','')}.geojson`;
+    a.href = URL.createObjectURL(new Blob([text], {type}));
+    a.download = filename;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
 
-    // 同时导出 CSV 轮廓点
-    let csv = `ContourID,Inline,Crossline,Depth,Direction\n`;
-    geoContours.forEach((ring, i) => {
-        ring.forEach(p => {
-            csv += `${i},${p.il},${p.xl},${p.depth},${curDir}\n`;
-        });
-    });
-    const csvBlob = new Blob([csv], {type: 'text/csv'});
-    const a2 = document.createElement('a');
-    a2.href = URL.createObjectURL(csvBlob);
-    a2.download = `sam_mask_${volInfo.name || 'unknown'}_${currentSliceKey().replace(':','')}.csv`;
-    a2.click();
+function maskEqualsRound(bin, W, H, round, gridShape) {
+    if (!round || !round.mask || !gridShape || gridShape[0] !== H || gridShape[1] !== W) return false;
+    for (let i = 0; i < H; i++) {
+        const row = round.mask[i];
+        for (let j = 0; j < W; j++) if ((row[j] >= 0.5 ? 1 : 0) !== bin[i * W + j]) return false;
+    }
+    return true;
+}
 
-    setStatus('ready', `✅ 📐 已导出 ${contours.length} 个多边形轮廓 (GeoJSON + CSV)`);
+function maskPixelCount(mask) {
+    let n = 0;
+    (mask || []).forEach(row => row.forEach(v => { if (v >= 0.5) n++; }));
+    return n;
+}
+
+// QC round log of a refine run: scores, metrics, corrections and prompts per round, without full masks
+function buildQcLog(run) {
+    return {
+        schema: 'samforgeophysics.qc_log/1',
+        exported_at: new Date().toISOString(),
+        run_id: run.run_id,
+        volume: run.volume,
+        direction: run.direction,
+        index: run.index,
+        sam_view: run.mode,
+        target_type: run.target_type,
+        grid_shape: run.grid_shape,
+        constants: run.constants,
+        best_round: run.best_round,
+        selected_round: refineSelected,
+        stop_reason: run.stop_reason,
+        stop_message: run.stop_message,
+        rounds: run.rounds.map(r => ({
+            round: r.round,
+            score: r.score,
+            delta: r.delta,
+            metrics: r.metrics,
+            correction: r.correction,
+            prompts: r.prompts,
+            truth_reference: r.truth_reference
+                ? Object.assign({note: 'Reference only: overlap with the synthetic ground truth; the QC loop never sees it.'},
+                                r.truth_reference)
+                : null,
+            mask_pixels: maskPixelCount(r.mask),
+        })),
+    };
 }
 
 // ═══════════════════════════════════════════════════════
-// Marching Squares 轮廓提取
+// Mask outline tracing (pixel-edge boundaries)
 // ═══════════════════════════════════════════════════════
 
-function extractContours(data, w, h, threshold) {
-    // 二值化
-    const bin = new Uint8Array(w * h);
-    for (let i = 0; i < w * h; i++) bin[i] = data[i] >= threshold ? 1 : 0;
-
-    // 边界追踪: 找所有连通区域的外轮廓
-    const visited = new Uint8Array(w * h);
-    const contours = [];
-
-    for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            const idx = y * w + x;
-            if (bin[idx] && !visited[idx]) {
-                // BFS 标记连通区域, 同时收集边界像素
-                const region = [];
-                const boundary = [];
-                const queue = [idx];
-                visited[idx] = 1;
-                while (queue.length) {
-                    const ci = queue.shift();
-                    region.push(ci);
-                    const cx = ci % w, cy = (ci / w) | 0;
-                    let isBoundary = false;
-                    for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-                        const nx = cx + dx, ny = cy + dy;
-                        if (nx < 0 || nx >= w || ny < 0 || ny >= h) { isBoundary = true; continue; }
-                        const ni = ny * w + nx;
-                        if (!bin[ni]) { isBoundary = true; continue; }
-                        if (!visited[ni]) { visited[ni] = 1; queue.push(ni); }
-                    }
-                    if (isBoundary) boundary.push([cx, cy]);
-                }
-                if (boundary.length >= 6) {
-                    // 对边界点排序形成环 (按角度排序)
-                    const ring = orderBoundaryRing(boundary);
-                    contours.push(ring);
-                }
-            }
+// Returns polygons as [outerRing, ...holeRings]; rings are closed lists of [x, y] pixel corners.
+// Foreground is 4-connected (diagonal pixels are separate polygons). Largest polygon first.
+function extractContours(bin, w, h) {
+    const fg = (x, y) => x >= 0 && x < w && y >= 0 && y < h && bin[y * w + x] === 1;
+    // Directed boundary edges with the foreground on the right (y points down)
+    const out = new Map();   // vertex key -> list of edges leaving it
+    const edges = [];
+    const add = (x0, y0, x1, y1) => {
+        const e = {x0, y0, x1, y1, used: false};
+        edges.push(e);
+        const k = y0 * (w + 1) + x0;
+        if (!out.has(k)) out.set(k, []);
+        out.get(k).push(e);
+    };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        if (!fg(x, y)) continue;
+        if (!fg(x, y - 1)) add(x, y, x + 1, y);
+        if (!fg(x + 1, y)) add(x + 1, y, x + 1, y + 1);
+        if (!fg(x, y + 1)) add(x + 1, y + 1, x, y + 1);
+        if (!fg(x - 1, y)) add(x, y + 1, x, y);
+    }
+    const loops = [];
+    for (const start of edges) {
+        if (start.used) continue;
+        const ring = [[start.x0, start.y0]];
+        let e = start;
+        while (e && !e.used) {
+            e.used = true;
+            ring.push([e.x1, e.y1]);
+            const dx = e.x1 - e.x0, dy = e.y1 - e.y0;
+            const cand = (out.get(e.y1 * (w + 1) + e.x1) || []).slice();
+            // Two edges leave a vertex only at a diagonal saddle; the right turn keeps diagonal
+            // pixels apart. The loop closes when the chosen edge is the (used) start edge.
+            const rank = c => {
+                const cx = c.x1 - c.x0, cy = c.y1 - c.y0;
+                if (cx === -dy && cy === dx) return 0;
+                if (cx === dx && cy === dy) return 1;
+                return 2;
+            };
+            cand.sort((a, b) => rank(a) - rank(b));
+            e = cand[0];
         }
+        loops.push(simplifyRing(ring));
     }
-    // 按面积降序排列
-    contours.sort((a, b) => contourArea(b) - contourArea(a));
-    return contours;
-}
-
-function orderBoundaryRing(pts) {
-    // 计算质心
-    let cx = 0, cy = 0;
-    pts.forEach(([x, y]) => { cx += x; cy += y; });
-    cx /= pts.length; cy /= pts.length;
-    // 按极角排序
-    const sorted = pts.slice().sort(([ax, ay], [bx, by]) => {
-        return Math.atan2(ay - cy, ax - cx) - Math.atan2(by - cy, bx - cx);
+    // Outer rings have positive signed area (clockwise on screen), holes negative
+    const outers = loops.filter(r => ringSignedArea(r) > 0).map(r => [r]);
+    loops.filter(r => ringSignedArea(r) < 0).forEach(hole => {
+        const [x0, y0] = hole[0], [x1, y1] = hole[1];
+        const dx = Math.sign(x1 - x0), dy = Math.sign(y1 - y0);
+        const px = (x0 + x0 + dx) / 2 + 0.25 * dy, py = (y0 + y0 + dy) / 2 - 0.25 * dx;  // just inside the hole
+        let owner = null;
+        outers.forEach(p => {
+            if (pointInRing(px, py, p[0]) && (!owner || ringSignedArea(p[0]) < ringSignedArea(owner[0]))) owner = p;
+        });
+        if (owner) owner.push(hole);
     });
-    // 闭合环
-    sorted.push(sorted[0]);
-    return sorted;
+    outers.sort((a, b) => polygonAreaPixels(b) - polygonAreaPixels(a));
+    return outers;
 }
 
-function contourArea(ring) {
-    // Shoelace formula (像素坐标)
-    let area = 0;
-    for (let i = 0; i < ring.length - 1; i++) {
-        area += ring[i][0] * ring[i+1][1] - ring[i+1][0] * ring[i][1];
+// Drop vertices in the middle of straight runs; keeps the ring closed
+function simplifyRing(ring) {
+    const pts = ring.slice(0, -1);
+    const n = pts.length;
+    const keep = pts.filter((p, i) => {
+        const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+        return (p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]) !== 0;
+    });
+    keep.push(keep[0]);
+    return keep;
+}
+
+function ringSignedArea(ring) {
+    let s = 0;
+    for (let i = 0; i < ring.length - 1; i++) s += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+    return s / 2;
+}
+
+// Pixel count covered by a polygon: outer area minus holes
+function polygonAreaPixels(rings) {
+    return rings.reduce((s, r) => s + ringSignedArea(r), 0);
+}
+
+function pointInRing(x, y, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 2; i < ring.length - 1; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
     }
-    return Math.abs(area / 2);
+    return inside;
 }
 
 // ═══════════════════════════════════════════════════════
-// 分割结果验证 (对比 SAM 预测掩码与真值掩码)
+// Segmentation validation (compare the SAM predicted mask with a ground-truth mask)
 // ═══════════════════════════════════════════════════════
 
 const gtFileInput = document.getElementById('gtFileInput');
 
 async function validateSegmentation() {
     if (!logitsMap || !logitsWidth || !logitsHeight) {
-        setStatus('error', '请先运行 SAM 推理生成预测掩码');
+        setStatus('error', 'Run SAM first to create a predicted mask');
         return;
     }
     gtFileInput.click();
@@ -340,14 +438,14 @@ gtFileInput.onchange = async (e) => {
     if (!file) return;
 
     if (!logitsMap || !logitsWidth || !logitsHeight) {
-        setStatus('error', '预测掩码已失效，请重新运行 SAM');
+        setStatus('error', 'Predicted mask is no longer valid, run SAM again');
         return;
     }
 
-    setStatus('loading', '📐 加载真值掩码中...');
+    setStatus('loading', 'Loading ground-truth mask...');
 
     try {
-        // 1. 加载真值掩码 (图片或 CSV)
+        // 1. Load the ground-truth mask (image or CSV)
         let gt2d;
         const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|bmp|tif|tiff)$/i.test(file.name);
         const isCsv = /\.csv$/i.test(file.name);
@@ -357,11 +455,11 @@ gtFileInput.onchange = async (e) => {
         } else if (isCsv) {
             gt2d = await loadGtCsv(file, logitsWidth, logitsHeight);
         } else {
-            setStatus('error', '不支持的文件格式，请选择图片 (PNG/JPG) 或 CSV');
+            setStatus('error', 'Unsupported file format, choose an image (PNG/JPG) or CSV');
             return;
         }
 
-        // 2. 构建预测掩码 2D 数组 (二值化, 阈值 0.5)
+        // 2. Build the 2D predicted mask array (binarized, threshold 0.5)
         let pred2d = [];
         for (let y = 0; y < logitsHeight; y++) {
             const row = new Array(logitsWidth);
@@ -371,21 +469,21 @@ gtFileInput.onchange = async (e) => {
             pred2d.push(row);
         }
 
-        // 3. 降采样以控制 payload 大小
+        // 3. Downsample to limit the payload size
         const MAX_DIM = 512;
         pred2d = downsampleMask(pred2d, MAX_DIM);
         gt2d = downsampleMask(gt2d, MAX_DIM);
 
-        // 4. 确保形状一致 (以 pred2d 为基准对齐 GT)
+        // 4. Make the shapes match (align GT to pred2d)
         const ph = pred2d.length, pw = pred2d[0].length;
         const gh = gt2d.length, gw = gt2d[0].length;
         if (ph !== gh || pw !== gw) {
             gt2d = resizeMask(gt2d, pw, ph);
         }
 
-        setStatus('loading', '📊 计算验证指标中...');
+        setStatus('loading', 'Computing validation metrics...');
 
-        // 5. 确保会话存在 (验证结果需关联会话)
+        // 5. Make sure a session exists (validation results are linked to a session)
         let sid = currentSessionId;
         if (!sid) {
             const sr = await fetch('/api/db/session', { method: 'POST' });
@@ -396,11 +494,11 @@ gtFileInput.onchange = async (e) => {
             }
         }
         if (!sid) {
-            setStatus('error', '无法创建会话，验证失败');
+            setStatus('error', 'Could not create a session, validation failed');
             return;
         }
 
-        // 6. 调用验证 API
+        // 6. Call the validation API
         const resp = await fetch(`/api/db/session/${sid}/validation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -419,13 +517,13 @@ gtFileInput.onchange = async (e) => {
 
         const result = await resp.json();
         showValidationResult(result);
-        setStatus('ready', `✅ 验证完成 · IoU=${((result.metrics?.iou || 0) * 100).toFixed(1)}%`);
+        setStatus('ready', `Validation done · IoU=${((result.metrics?.iou || 0) * 100).toFixed(1)}%`);
     } catch (e) {
-        setStatus('error', '验证失败: ' + e.message);
+        setStatus('error', 'Validation failed: ' + e.message);
     }
 };
 
-// ── 真值掩码加载工具 ──────────────────────────────────
+// ── Ground-truth mask loaders ──────────────────────────────────
 
 function loadGtImage(file, targetW, targetH) {
     return new Promise((resolve, reject) => {
@@ -442,7 +540,7 @@ function loadGtImage(file, targetW, targetH) {
                 const row = new Array(targetW);
                 for (let x = 0; x < targetW; x++) {
                     const i = (y * targetW + x) * 4;
-                    // 灰度归一化到 0~1 (白色=前景)
+                    // Grayscale normalized to 0~1 (white = foreground)
                     row[x] = (data[i] + data[i + 1] + data[i + 2]) / 3 / 255;
                 }
                 grid.push(row);
@@ -450,7 +548,7 @@ function loadGtImage(file, targetW, targetH) {
             URL.revokeObjectURL(img.src);
             resolve(grid);
         };
-        img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('无法加载图片')); };
+        img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('Could not load image')); };
         img.src = URL.createObjectURL(file);
     });
 }
@@ -462,7 +560,7 @@ function loadGtCsv(file, targetW, targetH) {
             const n = parseFloat(v);
             return isNaN(n) ? 0 : n;
         })).filter(r => r.length > 0);
-        if (grid.length === 0) throw new Error('CSV 文件为空');
+        if (grid.length === 0) throw new Error('CSV file is empty');
         const srcW = grid[0].length, srcH = grid.length;
         if (srcW === targetW && srcH === targetH) return grid;
         return resizeMask(grid, targetW, targetH);
@@ -492,7 +590,7 @@ function downsampleMask(grid, maxDim) {
     return resizeMask(grid, Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
 }
 
-// ── 验证结果展示 ──────────────────────────────────────
+// ── Validation result display ──────────────────────────────────────
 
 function showValidationResult(result) {
     const m = result.metrics || {};
@@ -502,44 +600,44 @@ function showValidationResult(result) {
     const gtShape = (result.ground_truth_shape || []).join('×');
     document.getElementById('validationBody').innerHTML = `
         <div style="text-align:center;margin-bottom:14px;">
-            <div style="font-size:20px;font-weight:bold;color:#0066aa;">分割精度指标</div>
-            <div style="font-size:11px;color:#999;margin-top:4px;">预测掩码 ${predShape} · 真值掩码 ${gtShape}</div>
+            <div style="font-size:20px;font-weight:bold;color:#0066aa;">Segmentation accuracy</div>
+            <div style="font-size:11px;color:#999;margin-top:4px;">Predicted mask ${predShape} · Ground-truth mask ${gtShape}</div>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <tr style="background:#e8eef5;">
-                <th style="padding:7px 10px;border:1px solid #ccc;text-align:left;">指标</th>
-                <th style="padding:7px 10px;border:1px solid #ccc;text-align:right;">值</th>
-                <th style="padding:7px 10px;border:1px solid #ccc;text-align:left;">说明</th>
+                <th style="padding:7px 10px;border:1px solid #ccc;text-align:left;">Metric</th>
+                <th style="padding:7px 10px;border:1px solid #ccc;text-align:right;">Value</th>
+                <th style="padding:7px 10px;border:1px solid #ccc;text-align:left;">Meaning</th>
             </tr>
-            <tr><td style="padding:6px 10px;border:1px solid #ddd;font-weight:bold;">IoU</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-weight:bold;color:#0066aa;">${pct(m.iou ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">交并比 (核心指标)</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid #ddd;font-weight:bold;">IoU</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;font-weight:bold;color:#0066aa;">${pct(m.iou ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">Intersection over union (main metric)</td></tr>
             <tr><td style="padding:6px 10px;border:1px solid #ddd;">Dice</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.dice ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">F1-Score</td></tr>
-            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Precision</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.precision ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">精确率</td></tr>
-            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Recall</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.recall ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">召回率</td></tr>
-            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Specificity</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.specificity ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">特异度</td></tr>
-            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Accuracy</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.accuracy ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">总体准确率</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Precision</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.precision ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">Precision</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Recall</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.recall ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">Recall</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Specificity</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.specificity ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">Specificity</td></tr>
+            <tr><td style="padding:6px 10px;border:1px solid #ddd;">Accuracy</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right;">${pct(m.accuracy ?? 0)}</td><td style="padding:6px 10px;border:1px solid #ddd;color:#666;">Overall accuracy</td></tr>
         </table>
         <div style="margin-top:14px;padding:10px;background:#f8f8f8;border-radius:6px;font-size:12px;">
-            <b>混淆矩阵</b><br>
-            TP (真正) = ${c.tp ?? 0} &nbsp;&nbsp; FP (假正) = ${c.fp ?? 0}<br>
-            TN (真负) = ${c.tn ?? 0} &nbsp;&nbsp; FN (假负) = ${c.fn ?? 0}<br>
-            总像素数 = ${c.total ?? 0}
+            <b>Confusion matrix</b><br>
+            TP (true positive) = ${c.tp ?? 0} &nbsp;&nbsp; FP (false positive) = ${c.fp ?? 0}<br>
+            TN (true negative) = ${c.tn ?? 0} &nbsp;&nbsp; FN (false negative) = ${c.fn ?? 0}<br>
+            Total pixels = ${c.total ?? 0}
         </div>`;
     document.getElementById('validationModal').style.display = 'flex';
 }
 
-// 弹窗关闭
+// Close the modal
 const validationModal = document.getElementById('validationModal');
 document.getElementById('validationModalClose').onclick = () => validationModal.style.display = 'none';
 document.getElementById('validationModalOk').onclick = () => validationModal.style.display = 'none';
 validationModal.addEventListener('click', e => { if (e.target === validationModal) validationModal.style.display = 'none'; });
 
 // ═══════════════════════════════════════════════════════
-// 三维体 mask 叠加显示 & 跨切片传播
+// 3D volume mask overlay & cross-slice propagation
 // ═══════════════════════════════════════════════════════
 
 const VOL_MASK_NAME = 'sam_mask';
 
-// 切换切片后, 若体 mask 在该切片有内容, 载入为叠加层 (与 SAM logits 共用同一渲染)
+// After a slice change, if the volume mask has content on that slice, load it as the overlay (same rendering as SAM logits)
 async function loadVolumeMaskOverlay(dir, index) {
     if (volInfo.source !== 'api/npy' || !volInfo.name) return;
     try {
@@ -547,13 +645,13 @@ async function loadVolumeMaskOverlay(dir, index) {
         if (!r.ok) return;
         const rows = +r.headers.get('X-Rows'), cols = +r.headers.get('X-Cols');
         const arr = new Float32Array(await r.arrayBuffer());
-        if (dir !== curDir || index !== curIndex || arr.length !== rows * cols) return;  // 用户已切走
+        if (dir !== curDir || index !== curIndex || arr.length !== rows * cols) return;  // user already moved to another slice
         let any = false;
         for (let i = 0; i < arr.length; i++) if (arr[i] > 0.5) { any = true; break; }
         if (!any) return;
         logitsMap = arr; logitsHeight = rows; logitsWidth = cols;
         drawSeismic();
-    } catch (e) { /* 无体 mask 时静默 */ }
+    } catch (e) { /* silent when there is no volume mask */ }
 }
 
 const propPanel = document.getElementById('propPanel');
@@ -569,7 +667,7 @@ const propSliders = [
 });
 
 function syncPropSliderLimits() {
-    // 滑杆上限随当前卷尺寸变化 (最大 = 轴长 - 1)
+    // Slider maximum follows the current volume size (max = axis length - 1)
     const setMax = (id, n) => {
         const el = document.getElementById(id);
         el.max = Math.max(1, (n || 1) - 1);
@@ -593,10 +691,10 @@ let isPropagating = false;
 
 async function runPropagation() {
     if (volInfo.source !== 'api/npy' || !volInfo.name) {
-        setStatus('error', '传播仅支持 NPY 卷'); return;
+        setStatus('error', 'Propagation only works on NPY volumes'); return;
     }
-    if (isInferring || isPropagating) { setStatus('loading', '⏳ 推理/传播进行中，请等待...'); return; }
-    if (!logitsMap) { setStatus('error', '请先在当前切片运行 SAM (▶ SAM) 生成种子 mask'); return; }
+    if (isInferring || isPropagating) { setStatus('loading', 'Inference/propagation already running, please wait...'); return; }
+    if (!logitsMap) { setStatus('error', 'Run SAM (▶ SAM) on the current slice first to create a seed mask'); return; }
 
     isPropagating = true;
     const btn = document.getElementById('btnPropagate');
@@ -607,21 +705,21 @@ async function runPropagation() {
         max_vertical: +document.getElementById('propV').value,
         min_iou: +document.getElementById('propIou').value,
     };
-    setStatus('loading', `🔁 传播中 (IL ±${lim.max_il}, XL ±${lim.max_xl}, 纵向 ±${lim.max_vertical})...`);
+    setStatus('loading', `Propagating (IL ±${lim.max_il}, XL ±${lim.max_xl}, vertical ±${lim.max_vertical})...`);
     try {
         const resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/propagate`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({direction: curDir, index: curIndex, mask_name: VOL_MASK_NAME, ...lim})
         });
-        if (!resp.ok) throw new Error((await resp.json()).detail);
+        if (!resp.ok) throw await respError(resp);
         const r = await resp.json();
         const n = r.written_indices.length;
         const stops = [...new Set(r.slices.filter(s => s.stopped).map(s => s.stopped))];
         if (typeof refreshSurveyFootprint === 'function') refreshSurveyFootprint();
-        setStatus('ready', `✅ 传播完成 · 新增 ${n} 张切片 · 体素 ${r.total_voxels}` +
-            (stops.length ? ` · 停止原因: ${stops.join('/')}` : ''));
+        setStatus('ready', `Propagation done · ${n} new slices · Voxels ${r.total_voxels}` +
+            (stops.length ? ` · Stop reason: ${stops.join('/')}` : ''));
     } catch (e) {
-        setStatus('error', '传播失败: ' + e.message);
+        setStatus('error', 'Propagation failed: ' + errText(e));
     } finally {
         isPropagating = false;
         btn.disabled = false;

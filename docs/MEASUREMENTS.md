@@ -49,7 +49,7 @@ Wording for README and video: say "on our synthetic model, the low-frequency vie
 
 ## SAM3 + QC refine loop: which view SAM segments, 1 round vs loop (H3)
 
-**Command:** `python scripts/measure_refine.py` (add `--json out.json` for every round). Needs `data/weights/sam3.pt` and a GPU. Two reruns on the RTX 4090 D dev machine (11-13) printed byte-identical text and JSON (SHA-256 of the JSON `9d81809abb33…`). Other GPUs or drivers may differ in the last digits.
+**Command:** `python scripts/measure_refine.py` (add `--json out.json` for every round). Needs `data/weights/sam3.pt` and a GPU. Two reruns on the RTX 4090 D dev machine (11-12) printed byte-identical text and JSON (SHA-256 of the JSON `9d81809abb33…`). Other GPUs or drivers may differ in the last digits.
 
 **Protocol** (declared in the script before the first run; run once, not tuned):
 
@@ -58,7 +58,7 @@ Wording for README and video: say "on our synthetic model, the low-frequency vie
 - SAM segments either the raw or the low-frequency image. QC always runs on the raw slice (decision A). Same code path as `POST /api/npy/{vol}/refine`, `MAX_ROUNDS` 3, `MIN_GAIN` 0.01.
 - "Round 1" = plain SAM. "Kept" = the round the loop keeps (highest QC score). Truth IoU is attached after the loop and never seen by it.
 
-**Results** (2026-11-13, 19 inlines per row):
+**Results** (2026-11-12, 19 inlines per row):
 
 | Volume | SAM view | IoU round 1 (mean / median) | IoU kept (mean / median) | Loop kept a later round | Kept IoU higher / lower / same than round 1 | Stop reasons |
 |---|---|---|---|---|---|---|

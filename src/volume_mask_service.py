@@ -1,17 +1,17 @@
 """
-三维体 mask 服务 — 把 SAM 的 2D 切片 mask 回映射到地震体网格并存成体素 mask
+3-D volume mask service: maps SAM 2-D slice masks back onto the seismic grid and stores them as a voxel mask
 
-约定 (与 npy_service 一致):
-  体 amplitude.npy:      shape = (nIL, nXL, nSamples)
-  inline 切片图像:        (nSamples, nXL)   纵轴 = 采样点, 横轴 = XL
-  crossline 切片图像:     (nSamples, nIL)   纵轴 = 采样点, 横轴 = IL
-  timeslice 切片图像:     (nIL, nXL)        纵轴 = IL,   横轴 = XL
+Conventions (same as npy_service):
+  volume amplitude.npy:   shape = (nIL, nXL, nSamples)
+  inline slice image:     (nSamples, nXL)   vertical = samples, horizontal = XL
+  crossline slice image:  (nSamples, nIL)   vertical = samples, horizontal = IL
+  timeslice slice image:  (nIL, nXL)        vertical = IL,      horizontal = XL
 
-SAM 返回的 mask 是图像像素空间 (经放大/降采样, 任意 h×w), 覆盖整张切片图像,
-因此用线性缩放回到切片原生网格, 再按方向写入体 mask 对应位置。
+SAM returns masks in image pixel space (upscaled/downsampled, any h×w) covering the whole slice image,
+so they are linearly rescaled to the native slice grid and written into the volume mask by direction.
 
-存储: data/npy/<vol>/masks/<mask_name>.npy (bool, 与振幅体同 shape, memmap 原地更新)
-      data/npy/<vol>/masks/<mask_name>.json (来源、逐切片记录、体素数)
+Storage: data/npy/<vol>/masks/<mask_name>.npy (bool, same shape as the amplitude volume, memmap updated in place)
+      data/npy/<vol>/masks/<mask_name>.json (source, per-slice records, voxel count)
 """
 
 import json
@@ -28,18 +28,18 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 def _check_name(name: str):
     if not _NAME_RE.match(name) or name in (".", ".."):
-        raise ValueError(f"非法名称: {name!r} (仅允许字母数字 _ . -)")
+        raise ValueError(f"Invalid name: {name!r} (only letters, digits, _ . - allowed)")
 
 
 def _vol_shape(npy_dir: Path) -> tuple[int, int, int]:
     vol = np.load(str(npy_dir / "amplitude.npy"), mmap_mode="r")
     if vol.ndim != 3:
-        raise ValueError(f"振幅体应为 3D, 实际 {vol.ndim}D")
+        raise ValueError(f"Amplitude volume must be 3D, got {vol.ndim}D")
     return tuple(int(s) for s in vol.shape)
 
 
 def slice_grid_shape(direction: str, vol_shape: tuple[int, int, int]) -> tuple[int, int]:
-    """切片原生网格 (rows, cols)"""
+    """Native slice grid (rows, cols)"""
     n_il, n_xl, n_s = vol_shape
     if direction == "inline":
         return (n_s, n_xl)
@@ -47,7 +47,7 @@ def slice_grid_shape(direction: str, vol_shape: tuple[int, int, int]) -> tuple[i
         return (n_s, n_il)
     if direction == "timeslice":
         return (n_il, n_xl)
-    raise ValueError(f"未知方向: {direction}")
+    raise ValueError(f"Unknown direction: {direction}")
 
 
 def slice_max_index(direction: str, vol_shape: tuple[int, int, int]) -> int:
@@ -56,14 +56,14 @@ def slice_max_index(direction: str, vol_shape: tuple[int, int, int]) -> int:
 
 def resample_mask_to_grid(mask, grid_shape: tuple[int, int], threshold: float = 0.5) -> np.ndarray:
     """
-    把任意尺寸的 2D mask (概率/logit-0..1/布尔) 缩放到切片原生网格并二值化。
-    先对 float 做双线性缩放再阈值, 这样放大 N 倍的 mask 回缩时不会丢边界。
+    Rescale a 2-D mask of any size (probability / logit 0..1 / bool) to the native slice grid and binarize it.
+    Floats are rescaled bilinearly before thresholding, so an N-times upscaled mask keeps its edges when shrunk back.
     """
     arr = np.asarray(mask, dtype=np.float32)
     if arr.ndim != 2 or arr.size == 0:
-        raise ValueError(f"mask 必须是非空 2D 数组, 实际 shape={arr.shape}")
+        raise ValueError(f"mask must be a non-empty 2D array, got shape={arr.shape}")
     if not np.isfinite(arr).all():
-        raise ValueError("mask 含 NaN/Inf")
+        raise ValueError("mask contains NaN/Inf")
     rows, cols = grid_shape
     if arr.shape == (rows, cols):
         return arr >= threshold
@@ -82,13 +82,13 @@ def _open_mask_volume(npy_dir: Path, mask_name: str, vol_shape) -> np.ndarray:
     if npy_path.exists():
         m = np.lib.format.open_memmap(str(npy_path), mode="r+")
         if tuple(m.shape) != tuple(vol_shape) or m.dtype != np.bool_:
-            raise ValueError(f"已存在的 mask 体与振幅体不一致: {m.shape}/{m.dtype} vs {vol_shape}")
+            raise ValueError(f"Existing mask volume does not match the amplitude volume: {m.shape}/{m.dtype} vs {vol_shape}")
         return m
     return np.lib.format.open_memmap(str(npy_path), mode="w+", dtype=np.bool_, shape=tuple(vol_shape))
 
 
 def _slice_view(vol: np.ndarray, direction: str, index: int) -> np.ndarray:
-    """返回体中该切片的『切片图像朝向』视图 (可写)"""
+    """Return a writable view of this slice in the volume, in slice-image orientation"""
     if direction == "inline":
         return vol[index].T        # (nXL, nS).T -> (nS, nXL)
     if direction == "crossline":
@@ -100,18 +100,18 @@ def write_slice_mask(npy_dir: str, mask_name: str, direction: str, index: int, m
                      threshold: float = 0.5, mode: str = "replace",
                      score: float | None = None, points: list | None = None) -> dict:
     """
-    把一张切片的 2D mask 写入体 mask。
-    mode: replace = 覆盖该切片;  union = 与已有取并集
+    Write one slice's 2-D mask into the volume mask.
+    mode: replace = overwrite the slice;  union = merge with what is there
     """
     _check_name(mask_name)
     if direction not in DIRECTIONS:
-        raise ValueError(f"未知方向: {direction}")
+        raise ValueError(f"Unknown direction: {direction}")
     if mode not in ("replace", "union"):
-        raise ValueError(f"未知 mode: {mode}")
+        raise ValueError(f"Unknown mode: {mode}")
     npy_dir_p = Path(npy_dir)
     vol_shape = _vol_shape(npy_dir_p)
     if not (0 <= index < slice_max_index(direction, vol_shape)):
-        raise IndexError(f"{direction} 索引 {index} 超出范围 [0, {slice_max_index(direction, vol_shape) - 1}]")
+        raise IndexError(f"{direction} index {index} out of range [0, {slice_max_index(direction, vol_shape) - 1}]")
 
     grid = slice_grid_shape(direction, vol_shape)
     src_shape = list(np.asarray(mask).shape)
@@ -150,7 +150,7 @@ def read_mask_volume(npy_dir: str, mask_name: str) -> np.ndarray:
     _check_name(mask_name)
     npy_path, _ = _paths(Path(npy_dir), mask_name)
     if not npy_path.exists():
-        raise FileNotFoundError(f"mask 体不存在: {mask_name}")
+        raise FileNotFoundError(f"Mask volume not found: {mask_name}")
     return np.load(str(npy_path), mmap_mode="r")
 
 
@@ -161,11 +161,11 @@ def mask_footprint(npy_dir: str, mask_name: str) -> np.ndarray:
 
 
 def get_mask_info(npy_dir: str, mask_name: str, volume_meta: dict | None = None) -> dict:
-    """mask 体信息: 元数据 + 以 (il, xl, sample 时间) 表示的包围盒与质心"""
+    """Mask volume info: metadata plus bounding box and centroid in (il, xl, sample time)"""
     _check_name(mask_name)
     _, meta_path = _paths(Path(npy_dir), mask_name)
     if not meta_path.exists():
-        raise FileNotFoundError(f"mask 体不存在: {mask_name}")
+        raise FileNotFoundError(f"Mask volume not found: {mask_name}")
     info = json.loads(meta_path.read_text(encoding="utf-8"))
     vol = read_mask_volume(npy_dir, mask_name)
     idx = np.argwhere(vol)

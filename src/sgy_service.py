@@ -1,7 +1,7 @@
 """
-SGY/SEG-Y 处理服务 — 上传解析、NumPy 转换、切片生成
+SGY/SEG-Y service: upload parsing, NumPy conversion, slice generation
 
-流程: SGY 上传 → 解析元数据 → 转换为 NumPy (.npy) → 从 memmap 生成切片图片
+Flow: SGY upload -> parse metadata -> convert to NumPy (.npy) -> render slice images from memmap
 """
 
 import logging
@@ -20,7 +20,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SGY_DIR = DATA_DIR / "sgy"
 IMAGES_DIR = DATA_DIR / "images"
 
-# ── 当前 SGY/NumPy 状态 ──────────────────────────────────────
+# ── Current SGY/NumPy state ──────────────────────────────────
 _current: dict = {
     "sgy_path": None,
     "sgy_filename": None,
@@ -47,14 +47,14 @@ def is_loaded() -> bool:
 def upload_and_convert(save_path: str, filename: str,
                        il_byte: int = 0, xl_byte: int = 0) -> dict:
     """
-    上传 SGY → 解析元数据 → 转换为 NumPy (.npy)。
+    Upload SGY -> parse metadata -> convert to NumPy (.npy).
 
-    返回: {filename, il_range, xl_range, n_samples, dt_us, npy_path, ...}
+    Returns: {filename, il_range, xl_range, n_samples, dt_us, npy_path, ...}
     """
     import segyio
     import npy_service
 
-    # 1. 解析 SGY 元数据 — 多种策略尝试
+    # 1. Parse SGY metadata, trying several strategies
     ilines, xlines, samples, dt = [], [], [], 0
 
     strategies = []
@@ -74,7 +74,7 @@ def upload_and_convert(save_path: str, filename: str,
                 samples = [float(x) for x in f.samples]
                 dt = int(f.bin[segyio.BinField.Interval])
             if ilines and len(ilines) > 1:
-                logger.info("SGY 几何解析成功: strategy=%s  IL=%d~%d(%d)  XL=%d~%d(%d)",
+                logger.info("SGY geometry parsed: strategy=%s  IL=%d~%d(%d)  XL=%d~%d(%d)",
                             name, ilines[0], ilines[-1], len(ilines),
                             xlines[0], xlines[-1], len(xlines))
                 _current["il_byte"] = kwargs["iline"]
@@ -83,13 +83,13 @@ def upload_and_convert(save_path: str, filename: str,
         except Exception:
             continue
 
-    # 所有策略失败, fallback 到无几何模式
+    # All strategies failed: fall back to no-geometry mode
     if not ilines:
         with segyio.open(save_path, "r", ignore_geometry=True) as f:
             samples = [float(i) for i in range(f.samples.size)]
             dt = int(f.bin[segyio.BinField.Interval])
 
-    # 2. 更新全局状态
+    # 2. Update global state
     _current.update({
         "sgy_path": save_path,
         "sgy_filename": filename,
@@ -113,7 +113,7 @@ def upload_and_convert(save_path: str, filename: str,
         "sample_range": [samples[0], samples[-1]] if samples else [0, 0],
     }
 
-    # 3. 如果有几何信息, 转换为 NumPy
+    # 3. If geometry is available, convert to NumPy
     if ilines:
         try:
             npy_result = npy_service.sgy_to_npy(
@@ -125,16 +125,16 @@ def upload_and_convert(save_path: str, filename: str,
             info["npy_path"] = npy_result["npy_path"]
             info["npy_name"] = npy_result["npy_name"]
             info["npy_size_mb"] = npy_result["size_mb"]
-            logger.info("NumPy 转换完成: %s (%.1f MB)", npy_result["npy_name"], npy_result["size_mb"])
+            logger.info("NumPy conversion done: %s (%.1f MB)", npy_result["npy_name"], npy_result["size_mb"])
         except Exception as e:
-            logger.warning("NumPy 转换失败 (将使用 segyio 直接读取): %s", e)
+            logger.warning("NumPy conversion failed (falling back to direct segyio reads): %s", e)
             info["npy_error"] = str(e)
 
-    logger.info("SGY 加载完成: %s  IL=%s  XL=%s", filename, info["il_range"], info["xl_range"])
+    logger.info("SGY loaded: %s  IL=%s  XL=%s", filename, info["il_range"], info["xl_range"])
     return info
 
 
-# ── 切片生成 (优先从 Zarr 读取, fallback 到 segyio) ────────────
+# ── Slice generation (Zarr first, fall back to segyio) ────────
 
 def generate_slices(
     inline_indices: Optional[list[int]] = None,
@@ -142,11 +142,11 @@ def generate_slices(
     timeslice_indices: Optional[list[int]] = None,
     count_per_type: int = 5,
 ) -> dict:
-    """生成三类切片图片, 优先从 Zarr 读取"""
+    """Generate the three kinds of slice images, reading from Zarr first"""
     if not _current["sgy_path"]:
-        raise ValueError("请先加载 SGY 文件")
+        raise ValueError("Load an SGY file first")
     if _current["n_inlines"] == 0:
-        raise ValueError("SGY 文件缺少 IL/XL 几何信息")
+        raise ValueError("SGY file has no IL/XL geometry")
 
     ilines = np.array(_current["ilines"])
     xlines = np.array(_current["xlines"])
@@ -155,7 +155,7 @@ def generate_slices(
     n_xl = _current["n_crosslines"]
     n_samp = _current["n_samples"]
 
-    # 自动默认索引
+    # Default indices
     if not inline_indices:
         idx = np.linspace(0, n_il - 1, count_per_type + 2, dtype=int)[1:-1]
         inline_indices = [int(ilines[i]) for i in idx]
@@ -169,7 +169,7 @@ def generate_slices(
     generated = {"inline": [], "crossline": [], "timeslice": []}
     use_npy = _current.get("npy_path") is not None
 
-    # ── Inline 切片 ──────────────────────────────────────────
+    # ── Inline slices ────────────────────────────────────────
     for il_val in inline_indices:
         name = f"IL_{il_val:04d}.png"
         save_path = IMAGES_DIR / "inline" / name
@@ -189,9 +189,9 @@ def generate_slices(
             )
             generated["inline"].append(name)
         except Exception as e:
-            logger.warning("Inline %d 失败: %s", il_val, e)
+            logger.warning("Inline %d failed: %s", il_val, e)
 
-    # ── Crossline 切片 ───────────────────────────────────────
+    # ── Crossline slices ─────────────────────────────────────
     for xl_val in crossline_indices:
         name = f"XL_{xl_val:04d}.png"
         save_path = IMAGES_DIR / "crossline" / name
@@ -211,7 +211,7 @@ def generate_slices(
             )
             generated["crossline"].append(name)
         except Exception as e:
-            logger.warning("Crossline %d 失败: %s", xl_val, e)
+            logger.warning("Crossline %d failed: %s", xl_val, e)
 
     # ── TimeSlice ─────────────────────────────────────────────
     for ts_val in timeslice_indices:
@@ -233,10 +233,10 @@ def generate_slices(
             )
             generated["timeslice"].append(name)
         except Exception as e:
-            logger.warning("TimeSlice %d 失败: %s", ts_val, e)
+            logger.warning("TimeSlice %d failed: %s", ts_val, e)
 
     total = sum(len(v) for v in generated.values())
-    logger.info("切片生成完成: %d 张 (NumPy=%s)", total, use_npy)
+    logger.info("Slice generation done: %d images (NumPy=%s)", total, use_npy)
     return {"generated": total, "slices": generated, "source": "numpy" if use_npy else "segyio"}
 
 

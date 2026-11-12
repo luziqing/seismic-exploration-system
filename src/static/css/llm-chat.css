@@ -1,6 +1,6 @@
-/* llm-chat.css -- AI 助手聊天侧边栏 & 配置弹窗样式 (retro Windows UI) */
+/* llm-chat.css -- AI assistant chat sidebar & settings modal styles (retro Windows UI) */
 
-/* ── 聊天侧边栏 ─────────────────────────────────────────── */
+/* ── Chat sidebar ─────────────────────────────────────────── */
 #chatSidebar {
     position: fixed; top: 0; right: 0; bottom: 22px;
     width: 380px; background: var(--ui-bg);
@@ -36,7 +36,7 @@
 }
 .chat-close-icon:hover { color: #ffcccc; }
 
-/* ── 消息区域 ──────────────────────────────────────────── */
+/* ── Messages ──────────────────────────────────────────── */
 .chat-messages {
     flex: 1; overflow-y: auto; padding: 8px;
     background: white; display: flex; flex-direction: column; gap: 6px;
@@ -55,7 +55,7 @@
     border: 1px solid #ccc;
 }
 
-/* ── 输入区域 ──────────────────────────────────────────── */
+/* ── Input area ──────────────────────────────────────────── */
 .chat-input-area {
     border-top: 2px solid var(--ui-border);
     padding: 6px; display: flex; gap: 4px;
@@ -72,7 +72,7 @@
 }
 .chat-input-area button:active { border-style: inset; }
 
-/* ── 加载动画 ──────────────────────────────────────────── */
+/* ── Loading animation ──────────────────────────────────────────── */
 .chat-loading {
     display: none; padding: 8px 12px; align-self: flex-start;
 }
@@ -91,7 +91,7 @@
     40% { opacity: 1; }
 }
 
-/* ── 配置弹窗 ──────────────────────────────────────────── */
+/* ── Settings modal ──────────────────────────────────────────── */
 #llmConfigModal .modal-row { margin: 8px 0; }
 #llmConfigModal .modal-row label { min-width: 80px; font-weight: bold; }
 #llmConfigModal textarea {
@@ -107,7 +107,7 @@
 
 #providerLocalUrlRow { display: none; }
 
-/* ── 连接测试状态 ──────────────────────────────────────── */
+/* ── Connection test status ──────────────────────────────────────── */
 .connection-status {
     font-size: 11px; margin-top: 4px; padding: 4px 8px; display: none;
 }

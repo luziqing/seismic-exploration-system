@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -10,83 +10,34 @@
 </head>
 
 <body>
-    <!-- 隐藏的文件选择器 -->
+    <!-- Hidden file pickers -->
     <input type="file" id="sgyFileInput" accept=".sgy,.SGY,.segy,.SEGY" style="display:none">
     <input type="file" id="imageFileInput" accept="image/*" style="display:none">
     <input type="file" id="csvFileInput" accept=".csv,.CSV" style="display:none">
     <input type="file" id="vdsFileInput" accept=".vds,.vdso,.VDS,.VDSO" style="display:none">
     <input type="file" id="gtFileInput" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.PNG,.JPG,.JPEG,.BMP,.TIF,.TIFF,.csv,.CSV" style="display:none">
 
-    <!-- 工具栏 -->
+    <!-- Toolbar: demo controls stay visible; everything else lives in the "More" menu -->
     <div class="toolbar">
         <button class="action-btn" style="padding:1px 15px; font-weight:bold;">SamForGeophysics</button>
 
-        <span style="color:var(--ui-border);">|</span>
-        <span style="font-size:11px;font-weight:bold;">📦 数据体</span>
+        <span class="tb-sep">|</span>
+        <span style="font-size:11px;font-weight:bold;">Volume</span>
         <select id="volumeSelect" style="font-size:11px;padding:0 2px;">
-            <option value="">加载中...</option>
+            <option value="">Loading...</option>
         </select>
 
-        <span style="color:var(--ui-border);">|</span>
-        <button class="action-btn" id="btnLoadSGY">📂 加载 SGY</button>
-        <button class="action-btn" id="btnLoadVDS">📂 加载 VDS</button>
-        <button class="action-btn" id="btnGenSlices" disabled>🔪 生成切片</button>
-        <button class="action-btn" id="btnLoadImage">🖼 加载图片</button>
-
-        <span style="color:var(--ui-border);">|</span>
-        <div class="btn-group">
-            <div class="control-btn" id="btnFirst" title="第一条 (Home)">|⏮</div>
-            <div class="control-btn" id="btnPrev10" title="前 10 条 (PgUp)">⏮10</div>
-            <div class="control-btn" id="btnPrev" title="前一条 (←)">⏮</div>
-            <div class="control-btn" id="btnPlay" title="播放/暂停 (Space)">▶</div>
-            <div class="control-btn" id="btnNext" title="后一条 (→)">⏭</div>
-            <div class="control-btn" id="btnNext10" title="后 10 条 (PgDn)">⏭10</div>
-            <div class="control-btn" id="btnLast" title="最后一条 (End)">⏭|</div>
-        </div>
-        <label style="font-size:11px"><input type="checkbox" id="loopCb" checked> Loop</label>
-        <input type="number" id="fpsInput" value="4" min="1" max="30" title="FPS" style="width:36px">
-        <span style="font-size:11px">fps</span>
-
-        <span style="color:var(--ui-border);">|</span>
-        <span style="font-size:11px">方向</span>
-        <select id="dirSelect" style="font-size:11px;padding:0 2px;">
+        <span class="tb-sep">|</span>
+        <select id="dirSelect" style="font-size:11px;padding:0 2px;" title="Slice direction">
             <option value="inline">Inline</option>
             <option value="crossline">Crossline</option>
             <option value="timeslice">TimeSlice</option>
         </select>
         <span id="lineRangeLabel" style="font-size:11px;color:#555;"></span>
-        <input type="number" id="lineNo" min="0" step="1" style="width:70px" placeholder="Line号">
+        <input type="number" id="lineNo" min="0" step="1" style="width:70px" placeholder="Line no.">
         <button class="action-btn" id="btnGoLine">Go</button>
 
-        <span style="color:var(--ui-border);">|</span>
-        <span style="font-size:11px">Y轴</span>
-        <select id="yUnitSelect" style="font-size:11px;padding:0 2px;">
-            <option value="time">Time (ms)</option>
-            <option value="depth">Depth (m)</option>
-        </select>
-        <input type="number" id="velocityInput" value="3000" min="100" max="20000" title="时深转换速度" style="width:55px">
-        <span style="font-size:11px">m/s</span>
-        <button class="action-btn" id="btnApplyVelocity">Apply</button>
-
-        <span style="color:var(--ui-border);">|</span>
-        <button class="action-btn" id="btnGainUp" title="增益 (减小clip, 波形变大) [Q]">🔊 增益(Q)</button>
-        <button class="action-btn" id="btnGainDown" title="减益 (增大clip, 波形变小) [W]">🔉 减益(W)</button>
-        <button class="action-btn" id="btnScaleYUp" title="纵向拉伸 (放大上下) [Z]">↕️ 放大(Z)</button>
-        <button class="action-btn" id="btnScaleYDown" title="纵向压缩 (缩小上下) [Shift+Z]">↕️ 缩小(⇧Z)</button>
-        <button class="action-btn" id="btnScaleXUp" title="横向拉伸 (放大左右) [T]">↔️ 放大(T)</button>
-        <button class="action-btn" id="btnScaleXDown" title="横向压缩 (缩小左右) [Shift+T]">↔️ 缩小(⇧T)</button>
-        <button class="action-btn" id="btnFitWindow" title="自适应窗口 (重置缩放比例) [F]">🔲 自适应(F)</button>
-
-        <span style="color:var(--ui-border);">|</span>
-        <span style="font-size:11px">显示</span>
-        <select id="displayMode" style="font-size:11px;padding:0 2px;">
-            <option value="vd">Seismic Color</option>
-            <option value="wv">Wiggle</option>
-        </select>
-        <label style="font-size:11px"><input type="checkbox" id="samMode" checked> SAM</label>
-        <label style="font-size:11px"><input type="checkbox" id="logitsMode" checked> Logits</label>
-
-        <span style="color:var(--ui-border);">|</span>
+        <span class="tb-sep">|</span>
         <span class="seg-group" title="Which version of the slice to show and send to SAM">
             <button class="action-btn active" id="btnModeRaw">Raw</button><button class="action-btn" id="btnModeLow">Low-freq</button>
         </span>
@@ -98,57 +49,123 @@
             <option value="noise">Noisy | Clean</option>
         </select>
 
-        <span style="color:var(--ui-border);">|</span>
-        <span style="font-size:11px">🔧 设备</span>
-        <select id="deviceSelect" style="font-size:11px;padding:0 2px;max-width:180px;" title="SAM 推理设备 (模型加载后不可切换)">
-            <option value="auto">加载中...</option>
-        </select>
-
-        <span style="color:var(--ui-border);">|</span>
+        <span class="tb-sep">|</span>
         <button class="action-btn" id="btnInclude">Include</button>
         <button class="action-btn active" id="btnExclude">Exclude</button>
         <button class="action-btn" id="btnDelPoints">Undo</button>
         <button class="action-btn" id="btnClearMask">Clear</button>
-        <button class="action-btn" id="btnRunSAM" style="font-weight:bold;color:#0055cc;" title="运行 SAM3 分割推理 (拾取点后点击)">▶ SAM</button>
+        <button class="action-btn" id="btnRunSAM" style="font-weight:bold;color:#0055cc;" title="Run SAM3 segmentation (after placing points)">▶ SAM</button>
         <label id="autoRefineLabel" style="font-size:11px"><input type="checkbox" id="autoRefine" checked> Auto-refine</label>
-        <button class="action-btn" id="btnPropagate" style="color:#007755;" title="以当前切片的 SAM mask 为种子, 向相邻切片自动传播 (需先运行 SAM)">🔁 传播</button>
+        <span class="tb-nowrap">
+        <button class="action-btn" id="btnPropagate" style="color:#007755;" title="Use the SAM mask of this slice as a seed and propagate it to neighbouring slices (run SAM first)">Propagate</button>
         <span style="position:relative;display:inline-block;">
-            <button class="action-btn" id="btnPropSettings" title="传播范围设置">⚙</button>
+            <button class="action-btn" id="btnPropSettings" title="Propagation range settings">⚙</button>
             <div id="propPanel" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:#fff;border:1px solid var(--ui-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);width:270px;font-size:12px;">
-                <div style="font-weight:bold;margin-bottom:6px;">传播范围限制</div>
-                <label style="display:block;margin:6px 0;">Inline 范围 ±<b id="propIlVal">5</b>
+                <div style="font-weight:bold;margin-bottom:6px;">Propagation limits</div>
+                <label style="display:block;margin:6px 0;">Inline range ±<b id="propIlVal">5</b>
                     <input type="range" id="propIl" min="0" max="20" value="5" step="1" style="width:100%"></label>
-                <label style="display:block;margin:6px 0;">Crossline 范围 ±<b id="propXlVal">5</b>
+                <label style="display:block;margin:6px 0;">Crossline range ±<b id="propXlVal">5</b>
                     <input type="range" id="propXl" min="0" max="20" value="5" step="1" style="width:100%"></label>
-                <label style="display:block;margin:6px 0;">纵向范围 ±<b id="propVVal">30</b> 采样点
+                <label style="display:block;margin:6px 0;">Vertical range ±<b id="propVVal">30</b> samples
                     <input type="range" id="propV" min="0" max="100" value="30" step="1" style="width:100%"></label>
-                <label style="display:block;margin:6px 0;">停止阈值 IoU &lt; <b id="propIouVal">0.10</b>
+                <label style="display:block;margin:6px 0;">Stop when IoU &lt; <b id="propIouVal">0.10</b>
                     <input type="range" id="propIou" min="0" max="0.9" value="0.1" step="0.05" style="width:100%"></label>
-                <div style="color:#666;line-height:1.5;">沿当前方向传播时, 该轴的范围是步数上限; 另外两轴的范围是 mask 外扩上限。默认 5。</div>
+                <div style="color:#666;line-height:1.5;">Along the current direction the range caps the number of steps; on the other two axes it caps how far the mask may grow. Default 5.</div>
             </div>
         </span>
-        <button class="action-btn" id="btnExportMask" style="color:#880088;" title="导出 SAM 分割轮廓为多边形">📦 Export Mask</button>
-        <button class="action-btn" id="btnValidate" style="color:#0066aa;" title="验证 SAM 分割结果精度 (需先运行 SAM)">✅ 验证</button>
-        <button class="action-btn" id="btnExport" style="font-weight:bold;color:#005500;">Export</button>
-        <button class="action-btn" id="btnImportCSV" title="导入之前导出的 CSV 拾取文件">📥 Import</button>
-        <button class="action-btn" id="btnSave" title="保存拾取到浏览器本地">💾 Save</button>
-        <button class="action-btn" id="btnRestore" title="从浏览器本地恢复拾取">📂 Restore</button>
-        <button class="action-btn" id="btnReset" title="重置到初始状态">🗑 Reset</button>
+        </span>
+        <span class="tb-sep">|</span>
+        <button class="action-btn" id="btnExportMask" style="color:#880088;" title="Export the SAM mask outline as polygons">Export Mask</button>
 
-        <span style="color:var(--ui-border);">|</span>
-        <span id="statusIndicator" class="status-idle"></span>
-        <span id="statusText" style="font-size:11px;color:#555;">未连接</span>
-        <span style="color:var(--ui-border);">|</span>
-        <span id="fpsCounter" style="font-size:10px;color:#888;font-family:monospace;"></span>
+        <span class="tb-sep">|</span>
+        <span class="tb-status">
+            <span id="samBadge" class="sam-badge" title="SAM3 state">SAM3: …</span>
+            <span id="statusIndicator" class="status-idle"></span>
+            <span id="statusText" style="font-size:11px;color:#555;">Not connected</span>
+        </span>
+
+        <span id="moreWrap">
+            <button class="action-btn" id="btnMore" title="More tools" aria-haspopup="true" aria-expanded="false">More ▾</button>
+            <div id="moreMenu" role="menu">
+                <div class="more-row">
+                    <span class="more-label">Data</span>
+                    <button class="action-btn" id="btnLoadSGY">Load SGY</button>
+                    <button class="action-btn" id="btnLoadVDS">Load VDS</button>
+                    <button class="action-btn" id="btnGenSlices" disabled>Generate slices</button>
+                    <button class="action-btn" id="btnLoadImage">Load image</button>
+                </div>
+                <div class="more-row">
+                    <span class="more-label">Playback</span>
+                    <div class="btn-group">
+                        <div class="control-btn" id="btnFirst" title="First (Home)">|⏮</div>
+                        <div class="control-btn" id="btnPrev10" title="Back 10 (PgUp)">⏮10</div>
+                        <div class="control-btn" id="btnPrev" title="Previous (←)">⏮</div>
+                        <div class="control-btn" id="btnPlay" title="Play/Pause (Space)">▶</div>
+                        <div class="control-btn" id="btnNext" title="Next (→)">⏭</div>
+                        <div class="control-btn" id="btnNext10" title="Forward 10 (PgDn)">⏭10</div>
+                        <div class="control-btn" id="btnLast" title="Last (End)">⏭|</div>
+                    </div>
+                    <label style="font-size:11px"><input type="checkbox" id="loopCb" checked> Loop</label>
+                    <input type="number" id="fpsInput" value="4" min="1" max="30" title="FPS" style="width:36px">
+                    <span style="font-size:11px">fps</span>
+                    <span id="fpsCounter" style="font-size:10px;color:#888;font-family:monospace;"></span>
+                </div>
+                <div class="more-row">
+                    <span class="more-label">Y axis</span>
+                    <select id="yUnitSelect" style="font-size:11px;padding:0 2px;">
+                        <option value="time">Time (ms)</option>
+                        <option value="depth">Depth (m)</option>
+                    </select>
+                    <input type="number" id="velocityInput" value="3000" min="100" max="20000" title="Velocity for time-depth conversion" style="width:55px">
+                    <span style="font-size:11px">m/s</span>
+                    <button class="action-btn" id="btnApplyVelocity">Apply</button>
+                </div>
+                <div class="more-row">
+                    <span class="more-label">View</span>
+                    <button class="action-btn" id="btnGainUp" title="Gain up (smaller clip, larger amplitudes) [Q]">Gain + (Q)</button>
+                    <button class="action-btn" id="btnGainDown" title="Gain down (larger clip, smaller amplitudes) [W]">Gain − (W)</button>
+                    <button class="action-btn" id="btnScaleYUp" title="Stretch vertically [Z]">↕ + (Z)</button>
+                    <button class="action-btn" id="btnScaleYDown" title="Squeeze vertically [Shift+Z]">↕ − (⇧Z)</button>
+                    <button class="action-btn" id="btnScaleXUp" title="Stretch horizontally [T]">↔ + (T)</button>
+                    <button class="action-btn" id="btnScaleXDown" title="Squeeze horizontally [Shift+T]">↔ − (⇧T)</button>
+                    <button class="action-btn" id="btnFitWindow" title="Fit to window (reset zoom) [F]">Fit (F)</button>
+                </div>
+                <div class="more-row">
+                    <span class="more-label">Display</span>
+                    <select id="displayMode" style="font-size:11px;padding:0 2px;">
+                        <option value="vd">Seismic Color</option>
+                        <option value="wv">Wiggle</option>
+                    </select>
+                    <label style="font-size:11px"><input type="checkbox" id="samMode" checked> SAM</label>
+                    <label style="font-size:11px"><input type="checkbox" id="logitsMode" checked> Logits</label>
+                    <span style="font-size:11px">Device</span>
+                    <select id="deviceSelect" style="font-size:11px;padding:0 2px;max-width:180px;" title="SAM inference device (cannot change after the model is loaded)">
+                        <option value="auto">Loading...</option>
+                    </select>
+                </div>
+                <div class="more-row">
+                    <span class="more-label">Results</span>
+                    <button class="action-btn" id="btnValidate" style="color:#0066aa;" title="Check SAM mask accuracy against ground truth (run SAM first)">Validate</button>
+                    <button class="action-btn" id="btnExport" style="font-weight:bold;color:#005500;">Export</button>
+                    <button class="action-btn" id="btnImportCSV" title="Import a previously exported CSV picks file">Import</button>
+                    <button class="action-btn" id="btnSave" title="Save picks in this browser">Save</button>
+                    <button class="action-btn" id="btnRestore" title="Restore picks saved in this browser">Restore</button>
+                    <button class="action-btn" id="btnReset" title="Reset to the initial state">Reset</button>
+                </div>
+                <div class="more-row" id="moreAIRow">
+                    <span class="more-label">AI</span>
+                </div>
+            </div>
+        </span>
     </div>
 
-    <!-- 主展示区 -->
+    <!-- Main view -->
     <div class="main-container">
         <div class="plot-header" style="text-align:center;margin-bottom:4px;">
             <div id="plotSubtitle" style="font-size:14px;font-weight:bold;">Line no.=1511 (Panel=467)</div>
         </div>
 
-        <!-- 顶部 IL/XL 横坐标 -->
+        <!-- Top IL/XL axis -->
         <div class="flex" style="height:24px;">
             <div style="width:70px;position:relative;border-bottom:1px solid #000;" class="text-xs">
                 <div style="position:absolute;right:25px;bottom:2px;text-align:center;">IL<br>XL</div>
@@ -157,12 +174,12 @@
         </div>
 
         <div class="flex flex-1 overflow-hidden">
-            <!-- 左侧 Y 轴 -->
+            <!-- Left Y axis -->
             <div class="axis-y" id="leftAxis" style="width:70px;">
                 <div class="axis-label-v" id="yAxisLabel" style="left:2px;">Time (ms)</div>
             </div>
 
-            <!-- 画布 -->
+            <!-- Canvas -->
             <div class="workspace">
                 <canvas id="seismicCanvas"></canvas>
                 <canvas id="compareCanvas" style="display:none;" title="Compare view (read-only)"></canvas>
@@ -193,121 +210,121 @@
         </div>
     </div>
 
-    <!-- 切片浏览面板 -->
+    <!-- Slice browser panel -->
     <div id="slicePanel">
         <div style="display:flex;gap:10px;align-items:center;">
             <span id="slicePosLabel" style="font-size:11px;font-weight:bold;min-width:180px;"></span>
             <input type="range" id="lineSlider" min="0" max="0" value="0" step="1"
-                   style="flex:1" title="拖动浏览切片">
+                   style="flex:1" title="Drag to browse slices">
             <span id="sliceLineNo" style="font-size:11px;font-weight:bold;min-width:80px;color:#333;"></span>
         </div>
     </div>
 
     <footer style="display:flex;justify-content:space-between;align-items:center;">
         <span>SamForGeophysics · Kiroween 2026 entry · MIT</span>
-        <span id="backupStatus" style="color:#666;font-size:10px;" title="浏览器本地备份状态"></span>
+        <span id="backupStatus" style="color:#666;font-size:10px;" title="Browser backup status"></span>
     </footer>
 
-    <!-- 生成切片选项弹窗 -->
+    <!-- Generate-slices modal -->
     <div id="genSlicesModal" class="modal-overlay" style="display:none;">
         <div class="modal-box">
             <div class="modal-title">
-                <span>🔪 生成切片</span>
+                <span>Generate slices</span>
                 <div class="modal-close" id="genModalClose">✕</div>
             </div>
             <div class="modal-body">
                 <!-- Inline -->
                 <div class="modal-row">
                     <label><input type="checkbox" id="genIL" checked> Inline</label>
-                    <span>间隔</span>
+                    <span>Step</span>
                     <input type="number" id="genILStep" value="5" min="1" style="width:55px">
                     <span style="font-size:11px;color:#666;" id="genILPreview"></span>
                 </div>
                 <div class="modal-row" style="padding-left:62px;">
-                    <span>范围</span>
-                    <input type="number" id="genILFrom" placeholder="起始" style="width:65px">
+                    <span>Range</span>
+                    <input type="number" id="genILFrom" placeholder="From" style="width:65px">
                     <span>~</span>
-                    <input type="number" id="genILTo" placeholder="终止" style="width:65px">
-                    <span style="font-size:11px;color:#888;">(留空=全部)</span>
+                    <input type="number" id="genILTo" placeholder="To" style="width:65px">
+                    <span style="font-size:11px;color:#888;">(empty = all)</span>
                 </div>
                 <!-- Crossline -->
                 <div class="modal-row">
                     <label><input type="checkbox" id="genXL"> Crossline</label>
-                    <span>间隔</span>
+                    <span>Step</span>
                     <input type="number" id="genXLStep" value="5" min="1" style="width:55px">
                     <span style="font-size:11px;color:#666;" id="genXLPreview"></span>
                 </div>
                 <div class="modal-row" style="padding-left:72px;">
-                    <span>范围</span>
-                    <input type="number" id="genXLFrom" placeholder="起始" style="width:65px">
+                    <span>Range</span>
+                    <input type="number" id="genXLFrom" placeholder="From" style="width:65px">
                     <span>~</span>
-                    <input type="number" id="genXLTo" placeholder="终止" style="width:65px">
-                    <span style="font-size:11px;color:#888;">(留空=全部)</span>
+                    <input type="number" id="genXLTo" placeholder="To" style="width:65px">
+                    <span style="font-size:11px;color:#888;">(empty = all)</span>
                 </div>
                 <!-- TimeSlice -->
                 <div class="modal-row">
                     <label><input type="checkbox" id="genTS"> TimeSlice</label>
-                    <span>间隔</span>
+                    <span>Step</span>
                     <input type="number" id="genTSStep" value="50" min="1" style="width:55px">
                     <span style="font-size:11px;color:#666;" id="genTSPreview"></span>
                 </div>
                 <div class="modal-row" style="padding-left:75px;">
-                    <span>范围</span>
-                    <input type="number" id="genTSFrom" placeholder="起始ms" style="width:65px">
+                    <span>Range</span>
+                    <input type="number" id="genTSFrom" placeholder="From ms" style="width:65px">
                     <span>~</span>
-                    <input type="number" id="genTSTo" placeholder="终止ms" style="width:65px">
-                    <span style="font-size:11px;color:#888;">(留空=全部)</span>
+                    <input type="number" id="genTSTo" placeholder="To ms" style="width:65px">
+                    <span style="font-size:11px;color:#888;">(empty = all)</span>
                 </div>
                 <div class="gen-preview" id="genTotalPreview"></div>
             </div>
             <div class="modal-footer">
-                <button class="modal-btn" id="genModalCancel">取消</button>
-                <button class="modal-btn primary" id="genModalOK">确定生成</button>
+                <button class="modal-btn" id="genModalCancel">Cancel</button>
+                <button class="modal-btn primary" id="genModalOK">Generate</button>
             </div>
         </div>
     </div>
 
-    <!-- 崩溃恢复弹窗 -->
+    <!-- Crash recovery modal -->
     <div id="recoveryModal" class="modal-overlay" style="display:none;">
         <div class="modal-box">
             <div class="modal-title">
-                <span>📂 崩溃恢复</span>
+                <span>Crash recovery</span>
                 <div class="modal-close" id="recoveryModalClose">✕</div>
             </div>
             <div class="modal-body">
-                <p id="recoveryMessage">检测到浏览器本地有之前保存的拾取数据，是否恢复？</p>
+                <p id="recoveryMessage">Picks saved earlier were found in this browser. Restore them?</p>
             </div>
             <div class="modal-footer">
-                <button class="modal-btn" id="recoveryDiscard">丢弃</button>
-                <button class="modal-btn primary" id="recoveryRestore">恢复</button>
+                <button class="modal-btn" id="recoveryDiscard">Discard</button>
+                <button class="modal-btn primary" id="recoveryRestore">Restore</button>
             </div>
         </div>
     </div>
 
-    <!-- 验证结果弹窗 -->
+    <!-- Validation result modal -->
     <div id="validationModal" class="modal-overlay" style="display:none;">
         <div class="modal-box">
             <div class="modal-title">
-                <span>✅ 分割结果验证</span>
+                <span>Mask validation</span>
                 <div class="modal-close" id="validationModalClose">✕</div>
             </div>
             <div class="modal-body" id="validationBody"></div>
             <div class="modal-footer">
-                <button class="modal-btn primary" id="validationModalOk">关闭</button>
+                <button class="modal-btn primary" id="validationModalOk">Close</button>
             </div>
         </div>
     </div>
 
-    <!-- LLM 配置弹窗 -->
+    <!-- LLM settings modal -->
     <div id="llmConfigModal" class="modal-overlay" style="display:none;">
         <div class="modal-box" style="min-width:480px;">
             <div class="modal-title">
-                <span>⚙️ AI 助手设置</span>
+                <span>AI assistant settings</span>
                 <div class="modal-close" id="llmConfigClose">✕</div>
             </div>
             <div class="modal-body">
                 <div class="modal-row">
-                    <label>提供商</label>
+                    <label>Provider</label>
                     <select id="llmProviderSelect" style="border:1px solid var(--ui-border);padding:2px 4px;font-size:12px;min-width:200px;">
                         <option value="anthropic">Anthropic (Claude)</option>
                         <option value="openai">OpenAI (GPT-4o)</option>
@@ -316,26 +333,26 @@
                 </div>
                 <div class="modal-row">
                     <label>API Key</label>
-                    <input type="password" id="llmApiKey" style="border:1px solid var(--ui-border);padding:2px 4px;font-size:12px;min-width:280px;" placeholder="输入 API Key（仅保存于服务器）">
+                    <input type="password" id="llmApiKey" style="border:1px solid var(--ui-border);padding:2px 4px;font-size:12px;min-width:280px;" placeholder="API key (stored on the server only)">
                 </div>
                 <div class="modal-row">
-                    <label>模型</label>
-                    <input type="text" id="llmModel" style="border:1px solid var(--ui-border);padding:2px 4px;font-size:12px;min-width:280px;" placeholder="模型名称">
+                    <label>Model</label>
+                    <input type="text" id="llmModel" style="border:1px solid var(--ui-border);padding:2px 4px;font-size:12px;min-width:280px;" placeholder="Model name">
                 </div>
                 <div class="modal-row" id="providerLocalUrlRow">
                     <label>API URL</label>
                     <input type="text" id="llmLocalUrl" style="border:1px solid var(--ui-border);padding:2px 4px;font-size:12px;min-width:280px;" placeholder="http://localhost:11434/v1">
                 </div>
                 <div class="modal-row" style="align-items:flex-start;">
-                    <label>系统提示词</label>
-                    <textarea id="llmSystemPrompt" style="border:1px solid var(--ui-border);padding:3px 5px;font-size:12px;width:100%;height:80px;resize:vertical;" placeholder="自定义 AI 助手的行为指令..."></textarea>
+                    <label>System prompt</label>
+                    <textarea id="llmSystemPrompt" style="border:1px solid var(--ui-border);padding:3px 5px;font-size:12px;width:100%;height:80px;resize:vertical;" placeholder="Custom instructions for the AI assistant..."></textarea>
                 </div>
                 <div id="llmConnectionStatus" class="connection-status" style="display:none;"></div>
             </div>
             <div class="modal-footer">
-                <button class="modal-btn" id="llmConfigTest">测试连接</button>
-                <button class="modal-btn" id="llmConfigCancel">取消</button>
-                <button class="modal-btn primary" id="llmConfigSave">保存</button>
+                <button class="modal-btn" id="llmConfigTest">Test connection</button>
+                <button class="modal-btn" id="llmConfigCancel">Cancel</button>
+                <button class="modal-btn primary" id="llmConfigSave">Save</button>
             </div>
         </div>
     </div>

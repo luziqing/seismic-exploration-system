@@ -1,14 +1,14 @@
 """
-Zarr 地震数据体存储
+Zarr seismic volume storage
 
-将 SGY 转换为 Zarr 格式 (.zarr)，提供:
-  - O(1) Inline 切片读取
-  - O(1) Crossline 切片读取 (双存储)
-  - 快速 TimeSlice 读取
-  - LZ4 压缩
-  - 完整元数据 (IL/XL 范围, 采样间隔等)
+Converts SGY to Zarr (.zarr) and provides:
+  - O(1) inline slice reads
+  - O(1) crossline slice reads (stored twice)
+  - fast time-slice reads
+  - LZ4 compression
+  - full metadata (IL/XL ranges, sample interval, etc.)
 
-兼容 Zarr v3 API。
+Compatible with the Zarr v3 API.
 """
 
 import logging
@@ -22,7 +22,7 @@ logger = logging.getLogger("sam3-server")
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 ZARR_DIR = DATA_DIR / "zarr"
 
-# Zarr v3 API 检测
+# Zarr v3 API detection
 try:
     import zarr
     _ZARR_VERSION = int(zarr.__version__.split(".")[0])
@@ -30,7 +30,7 @@ except Exception:
     _ZARR_VERSION = 2
 
 if _ZARR_VERSION < 3:
-    logger.warning("检测到 Zarr v%d，本项目需要 Zarr v3+。请升级: pip install 'zarr>=3.0'", _ZARR_VERSION)
+    logger.warning("Found Zarr v%d; this project needs Zarr v3+. Upgrade with: pip install 'zarr>=3.0'", _ZARR_VERSION)
 
 
 def _ensure_zarr_dir():
@@ -40,10 +40,10 @@ def _ensure_zarr_dir():
 def sgy_to_zarr(sgy_path: str, zarr_name: Optional[str] = None,
                 il_byte: int = 0, xl_byte: int = 0) -> dict:
     """
-    将 SGY/SEG-Y 文件转换为 Zarr 格式。
+    Convert an SGY/SEG-Y file to Zarr.
 
-    il_byte/xl_byte: 自定义道头字节偏移 (0 = 使用 segyio 默认)
-    返回: {zarr_path, il_range, xl_range, n_samples, dt_us, shape}
+    il_byte/xl_byte: custom trace-header byte offsets (0 = segyio default)
+    Returns: {zarr_path, il_range, xl_range, n_samples, dt_us, shape}
     """
     import segyio
     import zarr
@@ -58,7 +58,7 @@ def sgy_to_zarr(sgy_path: str, zarr_name: Optional[str] = None,
         zarr_name += ".zarr"
     zarr_path = ZARR_DIR / zarr_name
 
-    logger.info("开始 SGY -> Zarr 转换: %s -> %s", sgy_path, zarr_path)
+    logger.info("Starting SGY -> Zarr conversion: %s -> %s", sgy_path, zarr_path)
 
     kwargs = {}
     if il_byte and xl_byte:
@@ -73,11 +73,11 @@ def sgy_to_zarr(sgy_path: str, zarr_name: Optional[str] = None,
         n_samp = len(samples)
         dt_us = int(f.bin[segyio.BinField.Interval])
 
-        # Zarr v3: 使用 LocalStore + open_group
+        # Zarr v3: use LocalStore + open_group
         store = zarr.storage.LocalStore(str(zarr_path))
         root = zarr.open_group(store=store, mode="w")
 
-        # 主存储: IL × XL × Samples, 每个 IL 一块
+        # Main store: IL × XL × Samples, one chunk per IL
         amplitude = root.create_array(
             "amplitude",
             shape=(n_il, n_xl, n_samp),
@@ -86,7 +86,7 @@ def sgy_to_zarr(sgy_path: str, zarr_name: Optional[str] = None,
             compressors=zarr.codecs.BloscCodec(cname="lz4", clevel=3),
         )
 
-        # 转置副本: XL × IL × Samples, 每个 XL 一块
+        # Transposed copy: XL × IL × Samples, one chunk per XL
         amplitude_xl = root.create_array(
             "amplitude_xl",
             shape=(n_xl, n_il, n_samp),
@@ -95,15 +95,15 @@ def sgy_to_zarr(sgy_path: str, zarr_name: Optional[str] = None,
             compressors=zarr.codecs.BloscCodec(cname="lz4", clevel=3),
         )
 
-        # 逐 IL 写入
+        # Write IL by IL
         for i, il_val in enumerate(ilines):
             il_data = np.array(f.iline[int(il_val)], dtype=np.float32)
             amplitude[i, :, :] = il_data
             amplitude_xl[:, i, :] = il_data
             if (i + 1) % 50 == 0:
-                logger.info("Zarr 写入进度: %d/%d IL", i + 1, n_il)
+                logger.info("Zarr write progress: %d/%d IL", i + 1, n_il)
 
-        # 元数据
+        # Metadata
         root.attrs["source_file"] = str(sgy_path)
         root.attrs["il_range"] = [int(ilines[0]), int(ilines[-1])]
         root.attrs["xl_range"] = [int(xlines[0]), int(xlines[-1])]
@@ -116,12 +116,12 @@ def sgy_to_zarr(sgy_path: str, zarr_name: Optional[str] = None,
         root.attrs["dt_us"] = dt_us
         root.attrs["format_version"] = "1.0"
 
-    # 统计文件大小
+    # File size
     total_size = sum(f.stat().st_size for f in zarr_path.rglob("*") if f.is_file())
     size_mb = total_size / (1024 * 1024)
 
     logger.info(
-        "Zarr 转换完成: %s  shape=(%d,%d,%d)  size=%.1f MB",
+        "Zarr conversion done: %s  shape=(%d,%d,%d)  size=%.1f MB",
         zarr_name, n_il, n_xl, n_samp, size_mb,
     )
 
@@ -140,35 +140,35 @@ def sgy_to_zarr(sgy_path: str, zarr_name: Optional[str] = None,
 
 
 def read_inline(zarr_path: str, il_index: int) -> np.ndarray:
-    """读取第 il_index 条 Inline, shape=(nXL, nSamples)"""
+    """Read inline il_index, shape=(nXL, nSamples)"""
     import zarr
     root = zarr.open_group(str(zarr_path), mode="r")
     return np.array(root["amplitude"][il_index, :, :])
 
 
 def read_crossline(zarr_path: str, xl_index: int) -> np.ndarray:
-    """读取第 xl_index 条 Crossline, shape=(nIL, nSamples)"""
+    """Read crossline xl_index, shape=(nIL, nSamples)"""
     import zarr
     root = zarr.open_group(str(zarr_path), mode="r")
     return np.array(root["amplitude_xl"][xl_index, :, :])
 
 
 def read_timeslice(zarr_path: str, sample_index: int) -> np.ndarray:
-    """读取第 sample_index 个时间切片, shape=(nIL, nXL)"""
+    """Read time slice sample_index, shape=(nIL, nXL)"""
     import zarr
     root = zarr.open_group(str(zarr_path), mode="r")
     return np.array(root["amplitude"][:, :, sample_index])
 
 
 def get_zarr_metadata(zarr_path: str) -> dict:
-    """读取 Zarr 元数据"""
+    """Read Zarr metadata"""
     import zarr
     root = zarr.open_group(str(zarr_path), mode="r")
     return dict(root.attrs)
 
 
 def list_zarr_volumes() -> list[dict]:
-    """列出 data/zarr/ 中所有 Zarr 卷"""
+    """List all Zarr volumes in data/zarr/"""
     _ensure_zarr_dir()
     volumes = []
     for p in sorted(ZARR_DIR.iterdir()):
@@ -185,12 +185,12 @@ def list_zarr_volumes() -> list[dict]:
                     "n_samples": meta.get("n_samples", 0),
                 })
             except Exception:
-                volumes.append({"name": p.name, "path": str(p), "error": "无法读取元数据"})
+                volumes.append({"name": p.name, "path": str(p), "error": "Cannot read metadata"})
     return volumes
 
 
 def find_zarr_for_sgy(sgy_filename: str) -> Optional[str]:
-    """查找某 SGY 文件对应的 Zarr 路径"""
+    """Find the Zarr path for an SGY file"""
     _ensure_zarr_dir()
     zarr_name = Path(sgy_filename).stem + ".zarr"
     zarr_path = ZARR_DIR / zarr_name
