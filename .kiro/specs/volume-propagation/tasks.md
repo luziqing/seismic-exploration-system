@@ -35,7 +35,7 @@
 - [ ] Before the public instance goes up: decide whether `/mask` and `/propagate` stay enabled, and cap request size for `mask` payloads
 - [ ] Decide whether propagation appears in the demo video (CLAUDE.md D4: at most a ~10 s "3-D extension" shot, after H1/H2/H3 are recorded)
 - [x] Survey-map footprint endpoint `GET /api/npy/{vol}/mask/{name}/footprint` (voxels per trace, binary float32 `(nIL, nXL)`) and the survey-map panel that shows it (scope S13, 2026-11-12; `tests/test_mask_footprint.py`)
-- [ ] Fix scope B1: a SAM click in the browser writes an empty seed slice, so browser propagation fails (API path works)
+- [x] Fix scope B1: browser SAM clicks wrote an empty seed (the canvas screenshot sent for embedding contained the pick marker). UI now embeds via `POST /api/npy/{vol}/embed` (server-rendered slice); 2026-11-12
 
 ## Out of scope
 

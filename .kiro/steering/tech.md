@@ -32,6 +32,8 @@ HTTP API (`src/server.py`):
 - `GET /api/npy/{vol}/slice/timeslice/{k}`
 - All three accept `?mode=raw|lowfreq` (default `raw`). `lowfreq` applies `lowfreq_service` along the time axis using `dt_us` from `meta.json`; a timeslice filters every trace first (volumes up to 256 MB). Same binary contract either way.
 
+- `POST /api/npy/{vol}/embed` `{direction, index, mode}` — the server renders the slice (grey 2–98 % stretch, uniform integer upscale) and embeds it for SAM; returns `embedding_id`, `image_size`, `scale`, `grid_shape`. The UI must use this for NPY volumes and never embed a canvas screenshot (it carries pick markers and overlays; bug B1).
+
 Volume mask and propagation (spec: `.kiro/specs/volume-propagation/`):
 - `POST /api/npy/{vol}/mask` — write one slice's SAM mask into `data/npy/{vol}/masks/<name>.npy` (bool, same shape as the volume) plus `<name>.json` provenance
 - `POST /api/npy/{vol}/propagate` — grow a seed slice along its normal axis inside a bounded box
