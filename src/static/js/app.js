@@ -29,6 +29,8 @@ let pickMode = 'exclude';
 let isInferring = false;
 let embeddingId = null;
 let embeddingImageSize = null;  // [w, h] of the image behind embeddingId
+let sliceMode = 'raw';          // 'raw' | 'lowfreq' — which version of the slice is shown (and embedded for SAM)
+let compareMode = 'off';        // 'off' | 'lowfreq' (raw vs low-freq) | 'noise' (noisy vs clean pair)
 let logitsMap = null;
 let logitsWidth = 0;
 let logitsHeight = 0;
@@ -301,12 +303,16 @@ if (deviceSelect) {
 const seismicImage = new Image();
 
 window.onresize = () => {
-    canvas.width = canvas.parentElement.clientWidth;
-    canvas.height = canvas.parentElement.clientHeight;
+    if (typeof sizeSectionCanvases === 'function') sizeSectionCanvases();
+    else {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
     if (currentSliceData && currentSliceShape) {
         renderSliceToCanvas(currentSliceData, currentSliceShape[0], currentSliceShape[1]);
     }
     drawSeismic();
+    if (typeof updateCompareView === 'function') updateCompareView();
 };
 
 window.addEventListener('beforeunload', () => {

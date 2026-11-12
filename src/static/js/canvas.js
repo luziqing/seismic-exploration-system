@@ -63,6 +63,7 @@ function redrawAll() {
         _renderSliceCanvas2D(currentSliceData, currentSliceShape[0], currentSliceShape[1]);
         drawSeismic();
     }
+    if (typeof updateCompareView === 'function') updateCompareView();  // keep the compare panel's zoom and gain in step
 }
 function _fpsTick() {
     _fpsFrames++;

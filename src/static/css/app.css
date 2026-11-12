@@ -83,3 +83,17 @@
 #surveyMap .survey-map-legend i:first-child { margin-left:0; }
 #surveyMap .sm-line { background:#d00000; height:2px !important; }
 #surveyMap .sm-mask { background:rgba(230,120,0,0.8); }
+/* Raw / Low-freq toggle and side-by-side compare view (S2) */
+.seg-group { display:inline-flex; }
+.seg-group .action-btn + .action-btn { margin-left:-1px; }
+.action-btn:disabled { color:#999; cursor:default; }
+#seismicCanvas, #compareCanvas { min-width:0; }
+.workspace.comparing #seismicCanvas, .workspace.comparing #compareCanvas { flex:0 0 50%; width:50%; }
+.workspace.comparing #compareCanvas { border-left:2px solid #333; box-sizing:border-box; cursor:default; }
+.panel-tag { position:absolute; top:6px; left:6px; z-index:80; background:rgba(255,255,255,0.88); border:1px solid #888; padding:1px 6px; font-size:11px; font-weight:bold; pointer-events:none; }
+.panel-tag:empty { display:none; }
+.panel-tag-right { left:calc(50% + 6px); }
+/* Keep the time axis at its 70 px: otherwise the canvas's pixel width squeezes it and the section no longer lines up with the top axis */
+#leftAxis { flex:0 0 70px; }
+/* Let the workspace shrink below the canvas's current pixel width, so resizing and compare mode measure the real space */
+.workspace { min-width:0; overflow:hidden; }

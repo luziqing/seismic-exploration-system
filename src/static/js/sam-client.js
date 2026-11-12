@@ -55,7 +55,7 @@ async function runSAMInference() {
             if (volInfo.source === 'api/npy' && volInfo.name) {
                 resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/embed`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({direction: curDir, index: curIndex, mode: 'raw'})
+                    body: JSON.stringify({direction: curDir, index: curIndex, mode: sliceMode})
                 });
             } else {
                 const tempC = document.createElement('canvas');

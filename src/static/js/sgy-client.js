@@ -201,6 +201,7 @@ function updateAxes() {
             leftAxis.appendChild(div);
         }
     }
+    if (typeof compareAdjustAxes === 'function') compareAdjustAxes();
 }
 
 // 后端切片 URL 适配: Zarr 与 VDS 接口一致
@@ -275,8 +276,10 @@ async function restoreCurrentSgyIfLoaded() {
     return true;
 }
 
-async function fetchSlice(source, name, dir, index) {
-    const resp = await fetch(sliceApiUrl(source, name, dir, index));
+async function fetchSlice(source, name, dir, index, mode = 'raw') {
+    let url = sliceApiUrl(source, name, dir, index);
+    if (source === 'api/npy' && mode && mode !== 'raw') url += `?mode=${encodeURIComponent(mode)}`;
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     // 二进制 float32 响应: shape 从响应头读取
     const rows = parseInt(resp.headers.get('X-Rows') || '0');
@@ -303,11 +306,13 @@ async function loadAndRenderSlice(dir, index) {
     isLoading = true;
     setStatus('loading', `加载 ${dir} ${index}...`);
 
-    const key = `${dir}:${index}`;
+    const mode = volInfo.source === 'api/npy' ? sliceMode : 'raw';
+    // Key includes volume and mode: the noisy/clean pair and raw/low-freq share directions and indices
+    const key = `${volInfo.name}:${mode}:${dir}:${index}`;
     try {
         let payload = cacheGet(sliceCache, key);
         if (!payload) {
-            payload = await fetchSlice(volInfo.source, volInfo.name, dir, index);
+            payload = await fetchSlice(volInfo.source, volInfo.name, dir, index, mode);
             cachePut(sliceCache, key, payload, SLICE_CACHE_SIZE);
         }
         const rows = payload.shape[0], cols = payload.shape[1];
@@ -327,6 +332,8 @@ async function loadAndRenderSlice(dir, index) {
         updateSubtitle(dir, index);
         updateLineControls(index);
         if (typeof updateSurveyMap === 'function') updateSurveyMap();
+        if (typeof syncCompareControls === 'function') syncCompareControls();
+        if (typeof updateCompareView === 'function') updateCompareView();
         // 创建新拾取会话
         currentSessionId = null;
         fetch('/api/db/session?slice_id=0', {method: 'POST'})

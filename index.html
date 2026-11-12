@@ -87,6 +87,18 @@
         <label style="font-size:11px"><input type="checkbox" id="logitsMode" checked> Logits</label>
 
         <span style="color:var(--ui-border);">|</span>
+        <span class="seg-group" title="Which version of the slice to show and send to SAM">
+            <button class="action-btn active" id="btnModeRaw">Raw</button><button class="action-btn" id="btnModeLow">Low-freq</button>
+        </span>
+        <button class="action-btn" id="btnNoisePair" disabled>Noisy ⇄ Clean</button>
+        <span style="font-size:11px">Compare</span>
+        <select id="compareSelect" style="font-size:11px;padding:0 2px;" title="Show a second version of the same slice on the right">
+            <option value="off">Off</option>
+            <option value="lowfreq">Raw | Low-freq</option>
+            <option value="noise">Noisy | Clean</option>
+        </select>
+
+        <span style="color:var(--ui-border);">|</span>
         <span style="font-size:11px">🔧 设备</span>
         <select id="deviceSelect" style="font-size:11px;padding:0 2px;max-width:180px;" title="SAM 推理设备 (模型加载后不可切换)">
             <option value="auto">加载中...</option>
@@ -152,6 +164,9 @@
             <!-- 画布 -->
             <div class="workspace">
                 <canvas id="seismicCanvas"></canvas>
+                <canvas id="compareCanvas" style="display:none;" title="Compare view (read-only)"></canvas>
+                <div id="mainPanelTag" class="panel-tag"></div>
+                <div id="comparePanelTag" class="panel-tag panel-tag-right" style="display:none;"></div>
                 <div id="infoBox"></div>
                 <div id="surveyMap" style="display:none;">
                     <div class="survey-map-head">
@@ -324,6 +339,7 @@
     <script src="/static/js/sgy-client.js"></script>
     <script src="/static/js/sam-client.js"></script>
     <script src="/static/js/survey-map.js"></script>
+    <script src="/static/js/compare.js"></script>
     <script src="/static/js/llm-client.js"></script>
 </body>
 
