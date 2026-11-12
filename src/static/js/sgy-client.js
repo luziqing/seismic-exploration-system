@@ -326,6 +326,7 @@ async function loadAndRenderSlice(dir, index) {
         loadVolumeMaskOverlay(dir, index);  // 若该切片已有体 mask (含传播结果) 则叠加显示
         updateSubtitle(dir, index);
         updateLineControls(index);
+        if (typeof updateSurveyMap === 'function') updateSurveyMap();
         // 创建新拾取会话
         currentSessionId = null;
         fetch('/api/db/session?slice_id=0', {method: 'POST'})

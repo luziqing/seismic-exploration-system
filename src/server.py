@@ -622,6 +622,18 @@ async def npy_mask_info(vol_name: str, mask_name: str):
         raise HTTPException(400, str(e))
 
 
+@app.get("/api/npy/{vol_name}/mask/{mask_name}/footprint")
+async def npy_mask_footprint(vol_name: str, mask_name: str):
+    """Plan view of a volume mask for the survey map: voxels per trace, binary float32 (nIL, nXL)."""
+    npy_dir = _npy_vol_dir(vol_name)
+    try:
+        return _npy_binary_response(volume_mask_service.mask_footprint(str(npy_dir), mask_name))
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.get("/api/npy/{vol_name}/mask/{mask_name}/slice/{direction}/{index}")
 async def npy_read_mask_slice(vol_name: str, mask_name: str, direction: str, index: int):
     """读取体 mask 的某张切片 (二进制 float32 0/1, 朝向与振幅切片一致)"""

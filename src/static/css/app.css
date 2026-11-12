@@ -70,3 +70,16 @@
         .border-black { border-color:#000; }
         .relative { position:relative; }
         .overflow-hidden { overflow:hidden; }
+
+/* Survey map (plan view IL x XL) in the top-right corner of the section view */
+#surveyMap { position:absolute; top:8px; right:8px; z-index:90; background:rgba(255,255,255,0.94); border:1px solid #888; box-shadow:0 2px 8px rgba(0,0,0,.2); font-size:11px; padding:4px 6px 5px; user-select:none; }
+#surveyMap .survey-map-head { display:flex; justify-content:space-between; align-items:center; font-weight:bold; margin-bottom:3px; gap:8px; }
+#surveyMap .survey-map-head button { border:1px solid #888; background:#eee; font-size:11px; line-height:12px; padding:0 5px; cursor:pointer; }
+#surveyMapCanvas { display:block; cursor:crosshair; image-rendering:pixelated; }
+#surveyMap .survey-map-axes { display:flex; justify-content:space-between; color:#666; font-size:10px; margin-top:1px; }
+#surveyMapInfo { color:#333; margin-top:2px; max-width:170px; }
+#surveyMap .survey-map-legend { color:#555; font-size:10px; margin-top:2px; }
+#surveyMap .survey-map-legend i { display:inline-block; width:10px; height:8px; margin:0 3px 0 6px; vertical-align:middle; }
+#surveyMap .survey-map-legend i:first-child { margin-left:0; }
+#surveyMap .sm-line { background:#d00000; height:2px !important; }
+#surveyMap .sm-mask { background:rgba(230,120,0,0.8); }

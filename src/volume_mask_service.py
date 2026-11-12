@@ -154,6 +154,12 @@ def read_mask_volume(npy_dir: str, mask_name: str) -> np.ndarray:
     return np.load(str(npy_path), mmap_mode="r")
 
 
+def mask_footprint(npy_dir: str, mask_name: str) -> np.ndarray:
+    """Plan-view footprint of a volume mask: voxels per trace, float32 (nIL, nXL)."""
+    vol = read_mask_volume(npy_dir, mask_name)
+    return np.count_nonzero(vol, axis=2).astype(np.float32)
+
+
 def get_mask_info(npy_dir: str, mask_name: str, volume_meta: dict | None = None) -> dict:
     """mask 体信息: 元数据 + 以 (il, xl, sample 时间) 表示的包围盒与质心"""
     _check_name(mask_name)

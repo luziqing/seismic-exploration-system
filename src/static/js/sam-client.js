@@ -113,6 +113,7 @@ async function runSAMInference() {
                 if (vr.ok) {
                     const v = await vr.json();
                     volNote = ` · 体素 ${v.total_voxels} (${v.slices_written} 切片)`;
+                    if (typeof refreshSurveyFootprint === 'function') refreshSurveyFootprint();
                 } else {
                     volNote = ' · 体 mask 写入失败';
                 }
@@ -590,6 +591,7 @@ async function runPropagation() {
         const r = await resp.json();
         const n = r.written_indices.length;
         const stops = [...new Set(r.slices.filter(s => s.stopped).map(s => s.stopped))];
+        if (typeof refreshSurveyFootprint === 'function') refreshSurveyFootprint();
         setStatus('ready', `✅ 传播完成 · 新增 ${n} 张切片 · 体素 ${r.total_voxels}` +
             (stops.length ? ` · 停止原因: ${stops.join('/')}` : ''));
     } catch (e) {
