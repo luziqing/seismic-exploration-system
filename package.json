@@ -7,7 +7,7 @@
     "dev": "node scripts/run.js src/server.py",
     "test": "npm run preflight && npm run data:verify",
     "check": "npm run check:js && npm run check:py && npm run preflight",
-    "check:js": "node --check src/static/js/app.js src/static/js/canvas.js src/static/js/sam-client.js src/static/js/sgy-client.js src/static/js/storage.js src/static/js/llm-client.js",
+    "check:js": "node scripts/check_js.js",
     "check:py": "node scripts/run.js -c \"import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8')) for p in pathlib.Path('src').rglob('*.py')]\"",
     "data:gen": "node scripts/run.js scripts/generate_synthetic_seismic.py",
     "data:verify": "node scripts/run.js scripts/generate_synthetic_seismic.py --verify-only",
