@@ -6,8 +6,9 @@ inclusion: always
 
 ## Backend
 
-- Python 3.10+, FastAPI + uvicorn, NumPy `<2.0`, Pillow, matplotlib (headless `Agg`).
+- Python 3.10+, FastAPI + uvicorn, NumPy `<2.0`, SciPy (`ndimage` for propagation prompts), Pillow, matplotlib (headless `Agg`).
 - SAM inference via `src/sam_service.py`. Weights (`sam3.pt` or equivalent) are **never committed**; load from `data/weights/` at runtime and degrade to a documented CPU / no-weight mode.
+- SAM calls: encode each image once under `torch.inference_mode()` and reuse the cached features for every prompt (Ultralytics `set_image` does not disable autograd on its own). All predictor access goes through `sam_service`'s lock; do not call `_model.predict` directly from other modules.
 - Persistence: SQLite (`src/database.py`) with a localStorage crash-recovery layer in the browser.
 - Optional LLM interpretation assist (`src/llm_service.py`, `src/static/js/llm-client.js`). Must be optional — the app must work with no API key.
 
@@ -30,10 +31,16 @@ HTTP API (`src/server.py`):
 - `GET /api/npy/{vol}/slice/crossline/{j}`
 - `GET /api/npy/{vol}/slice/timeslice/{k}`
 
+Volume mask and propagation (spec: `.kiro/specs/volume-propagation/`):
+- `POST /api/npy/{vol}/mask` — write one slice's SAM mask into `data/npy/{vol}/masks/<name>.npy` (bool, same shape as the volume) plus `<name>.json` provenance
+- `POST /api/npy/{vol}/propagate` — grow a seed slice along its normal axis inside a bounded box
+- `GET /api/npy/{vol}/masks`, `GET /api/npy/{vol}/mask/{name}/info`
+- `GET /api/npy/{vol}/mask/{name}/slice/{direction}/{index}` (binary float32 0/1, same orientation as the amplitude slice)
+
 ## Planned additions (see the spec)
 
-- `src/lowfreq_service.py`: band-pass / spectral weighting that emphasises the low-frequency band before SAM prompting. Never destroy the original volume — keep the raw slice for comparison.
-- `src/qc_service.py`: fault continuity and horizon closure error, consumed by a 2–3 round prompt-refinement loop.
+- `src/lowfreq_service.py` exists (spectral weighting on a 2-D slice); still to do: route it through the slice endpoints as `?mode=raw|lowfreq` and add the UI toggle. Never destroy the original volume — keep the raw slice for comparison.
+- `src/qc_service.py`: label-free deep-target QC (edge leakage, envelope contrast) and fault continuity, consumed by a prompt-refinement loop of at most 3 rounds (spec: `.kiro/specs/qc-refine-loop/`). Horizon closure error is deferred (`scope.md` D2).
 - `src/validation_service.py` already provides IoU / Dice / Precision / Recall against ground-truth masks. Reuse it; do not re-implement metrics.
 
 ## Hard constraints
