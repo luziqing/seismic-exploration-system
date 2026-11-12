@@ -520,7 +520,22 @@ class TestZarrService:
 
         zarr_path = self.zarr_dir / name
         store = zarr.storage.LocalStore(str(zarr_path))
-        root = zarr.open_group(store=store, mode="w")
+        il_start, xl_start = 100, 200
+        # Attributes go in at creation so the root zarr.json is written once. Rewriting it
+        # (zarr writes a .partial file and renames it over zarr.json) right after creation
+        # intermittently fails on Windows with WinError 5 while the new file is still held open.
+        root = zarr.open_group(store=store, mode="w", attributes={
+            "source_file": f"{name}.sgy",
+            "il_range": [il_start, il_start + shape[0] - 1],
+            "xl_range": [xl_start, xl_start + shape[1] - 1],
+            "ilines": list(range(il_start, il_start + shape[0])),
+            "xlines": list(range(xl_start, xl_start + shape[1])),
+            "samples": list(range(shape[2])),
+            "n_inlines": shape[0],
+            "n_crosslines": shape[1],
+            "n_samples": shape[2],
+            "dt_us": 4000,
+        })
 
         rng = np.random.default_rng(42)
         data = rng.standard_normal(shape).astype(np.float32)
@@ -544,17 +559,6 @@ class TestZarrService:
         for i in range(shape[0]):
             amp_xl[:, i, :] = data[i]
 
-        il_start, xl_start = 100, 200
-        root.attrs["source_file"] = f"{name}.sgy"
-        root.attrs["il_range"] = [il_start, il_start + shape[0] - 1]
-        root.attrs["xl_range"] = [xl_start, xl_start + shape[1] - 1]
-        root.attrs["ilines"] = list(range(il_start, il_start + shape[0]))
-        root.attrs["xlines"] = list(range(xl_start, xl_start + shape[1]))
-        root.attrs["samples"] = list(range(shape[2]))
-        root.attrs["n_inlines"] = shape[0]
-        root.attrs["n_crosslines"] = shape[1]
-        root.attrs["n_samples"] = shape[2]
-        root.attrs["dt_us"] = 4000
 
         return zarr_path, data
 
