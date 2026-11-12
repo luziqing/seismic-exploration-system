@@ -11,7 +11,7 @@
 |---|---|---|
 | 1 | Start date "2026-11-09" contradicts "first commit 2026-11-08" in `competition.md` / `HANDOFF.md` | `git log` shows the first commit at 2026-11-09 11:35 +0800, so the steering files were wrong: corrected there, README keeps 11-09 with the source named |
 | 2 | Sub-agent claim had no artefact | Added `docs/kiro/build-log.md`; README links it |
-| 3 | IDE / Web / Crew use not stated (placeholder) | **Open: needs the owner** |
+| 3 | IDE / Web / Crew use not stated (placeholder) | Owner confirmed: Kiro CLI and Kiro IDE used, Web and Crew not; README states this |
 | 4 | No audit run log linked | This file; README links it |
 | 5 | cu124 install not traceable | README now says where it was tested (E2 on the second machine) and links the log |
 | 6 | "3.13 and newer do not work" only evidenced for 3.14 | Reworded: 3.14 fails, 3.13 untested |

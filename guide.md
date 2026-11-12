@@ -9,7 +9,7 @@ SamForGeophysics is a Kiroween 2026 hackathon entry (Frankenstein category): a l
 - **Deadline:** Fri 2026-12-04 14:00 PT = Sat 12-05 06:00 Beijing. Internal target Thu 12-03. **Feature freeze 11-27**: after that only bug fixes, copy and video.
 - **Delivery:** a *test build* (public repo + README instructions). No hosted instance. SAM3 runs on local or LAN GPUs only.
 - **Done:** M1, M2, M3 (scope items S1–S10, S13, most of S11; E1, E2, E3, first E6). 200 tests green.
-- **Left:** M4 (section 9) and two owner actions: make the repo public; state IDE / Web / Crew use in the README.
+- **Left:** M4 (section 9). Kiro surfaces used: CLI and IDE (owner, 11-12); Web and Crew not used, so never claim them.
 
 The single source of truth for scope and status is **`.kiro/steering/scope.md`, section 0 first**. Work that does not map to an S- or E-item there is not started. Changing the boundary needs the owner's yes, written into `scope.md` first.
 
