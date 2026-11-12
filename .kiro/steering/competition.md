@@ -16,7 +16,7 @@ Judging: Stage One pass/fail (theme fit + required tools), Stage Two five equall
 
 ## Hard requirements (checklist)
 
-- [x] New repository with no inherited git history from the earlier SGSeg project (first commit 2026-11-08)
+- [x] New repository with no inherited git history from the earlier SGSeg project (first commit 2026-11-09 11:35 Beijing, per `git log`)
 - [ ] **Public GitHub** repository (NOT GitLab/BitBucket) containing all source, assets and run instructions
 - [x] MIT licence at root — must also be **detectable in the GitHub About section**
 - [x] `/.kiro` at repo root, committed, never in `.gitignore`; specs / steering / hooks used substantively
@@ -43,7 +43,7 @@ Official rule:
 
 > "Only new projects are eligible. You must build your project during the Submission Period (October 30 to December 4, 2026). Projects you started before October 30, including Kiroween 2025 projects, are not eligible."
 
-The earlier SGSeg project began in June 2026. This repository is new (first commit 2026-11-08, no inherited history) and every competition-facing element — low-frequency conditioning, the QC self-improving loop, product UI, and the whole Kiro workflow — is built after Oct 30, but the volume browser / SAM prompt pipeline was adapted from SGSeg.
+The earlier SGSeg project began in June 2026. This repository is new (first commit 2026-11-09, no inherited history) and every competition-facing element — low-frequency conditioning, the QC self-improving loop, product UI, and the whole Kiro workflow — is built after Oct 30, but the volume browser / SAM prompt pipeline was adapted from SGSeg.
 
 The full rules (re-read 2026-11-12) settle the approach: entrants "must disclose any other pre-existing code or work incorporated into the Project. The work described and submitted must have been built during the Submission Period." So we take option (a): present SGSeg as a disclosed pre-existing technical base, list precisely what was built after Oct 30, and describe only that as the project. The owner must still confirm SGSeg is solely theirs (`scope.md` §9). Never overstate originality.
 

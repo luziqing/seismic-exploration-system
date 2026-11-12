@@ -6,7 +6,7 @@
 
 SamForGeophysics — a **Kiroween 2026** (Kiro's official Halloween hackathon, Devpost) entry in the **Frankenstein** category: fuse a vision foundation model (SAM) with seismic interpretation so weak deep targets become interpretable. The differentiators are **low-frequency-first conditioning**, a **low-noise "cleaner platform" data variant**, and a **QC-driven self-improving prompt loop** — never a first-of-its-kind claim.
 
-This repository is new (first commit 2026-11-08, no inherited git history). The volume browser / SAM prompt pipeline was adapted from the author's earlier open-source SGSeg project; everything competition-facing (synthetic data, low-frequency spec, QC loop, Kiro workflow) was created inside the submission period. That provenance is disclosed in README's *Eligibility note* — keep it that way.
+This repository is new (first commit 2026-11-09, no inherited git history). The volume browser / SAM prompt pipeline was adapted from the author's earlier open-source SGSeg project; everything competition-facing (synthetic data, low-frequency spec, QC loop, Kiro workflow) was created inside the submission period. That provenance is disclosed in README's *Eligibility note* — keep it that way.
 
 ## Read in this order
 

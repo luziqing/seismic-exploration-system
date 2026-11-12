@@ -35,7 +35,7 @@ The app is a local web app: a Python server plus a page in your browser. There i
 
 **Prerequisites**
 
-- **Python 3.10, 3.11 or 3.12.** Python 3.13 and newer do not work yet: `numpy<2.0` has no wheels for them.
+- **Python 3.10, 3.11 or 3.12** (tested: 3.12). Python 3.14 fails because `numpy<2.0` has no wheels for it; 3.13 is untested.
 - Git.
 - Node.js is optional; it only provides the `npm run …` shortcuts. Every step has a plain Python command.
 - Disk space: 3.5 GB for the SAM3 weights plus a few GB for PyTorch.
@@ -45,16 +45,16 @@ The app is a local web app: a Python server plus a page in your browser. There i
 Windows (PowerShell):
 
 ```powershell
-git clone https://github.com/luziqing/seismic-exploration-system.git SamForGeophysics
+git clone -b kiro https://github.com/luziqing/seismic-exploration-system.git SamForGeophysics
 cd SamForGeophysics
-py -3.12 -m venv .venv            # or: uv venv --python 3.12 .venv
+py -3.12 -m venv .venv            # or, if Python 3.12 came from uv: uv venv --seed --python 3.12 .venv
 .venv\Scripts\Activate.ps1
 ```
 
 Linux:
 
 ```bash
-git clone https://github.com/luziqing/seismic-exploration-system.git SamForGeophysics
+git clone -b kiro https://github.com/luziqing/seismic-exploration-system.git SamForGeophysics
 cd SamForGeophysics
 python3.12 -m venv .venv && source .venv/bin/activate
 ```
@@ -62,11 +62,16 @@ python3.12 -m venv .venv && source .venv/bin/activate
 **2. Install dependencies**
 
 ```bash
-# With an NVIDIA GPU, install the CUDA build of PyTorch first (on Windows, PyPI's default torch is CPU-only):
-python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+# With an NVIDIA GPU, install the CUDA builds of PyTorch and torchvision first
+# (PyPI's default torch on Windows is CPU-only, and a torchvision from PyPI would replace the CUDA torch):
+python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 # Then the app (and the test tools):
 python -m pip install -r requirements.txt -r requirements-dev.txt
+# Check: should print a "+cu124" version and True
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
+
+Tested on Windows 10 with an RTX 4090 and torch 2.6.0+cu124, following these steps on a fresh machine ([log](docs/kiro/build-log.md#e2-clean-clone-on-a-second-machine)). For other CUDA versions, pick the matching index on <https://pytorch.org/get-started/locally/>.
 
 **3. Generate the demo data** (deterministic, 48 × 48 × 256 samples, about 2.4 MB each, written to `data/npy/`)
 
@@ -88,7 +93,7 @@ The weights are not in this repository. They are Meta's, under the [SAM License]
    ```
 3. Check the file: 3,450,062,241 bytes, SHA-256 `9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e`.
    ```powershell
-   Get-FileHash data\weights\sam3.pt -Algorithm SHA256     # Windows
+   (Get-FileHash data\weights\sam3.pt -Algorithm SHA256).Hash -eq '9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e'   # Windows: True
    ```
    ```bash
    sha256sum data/weights/sam3.pt                          # Linux
@@ -143,7 +148,7 @@ Design decisions and their reasons, including the ones that failed, are in `.kir
 
 Everything below is committed under [`/.kiro`](.kiro) and in the scripts it calls.
 
-**CLI.** The project was built with Kiro CLI sessions: spec writing, implementation, test and GPU measurement runs, browser checks and commits. Larger independent jobs were handed to sub-agents running in parallel with fresh context, e.g. the English translation of the frontend and of the server messages ran at the same time as the export work. <!-- OWNER: add IDE / Web / Crew use here if any, or state "not used". -->
+**CLI.** The project was built with Kiro CLI sessions: spec writing, implementation, test and GPU measurement runs, browser checks and commits. Larger independent jobs were handed to sub-agents with fresh context, some in parallel: the English translation of the frontend, the translation of the server messages alongside the export rewrite, a documentation check of Kiro's hook and agent formats, and the clean-clone test on a second machine by a session that had not seen the repository. What each was asked and what it reported is in [`docs/kiro/build-log.md`](docs/kiro/build-log.md). <!-- OWNER: add IDE / Web / Crew use here if any, or state "not used". -->
 
 **Spec-driven development.** Three specs in `.kiro/specs/`:
 - `samforgeophysics-mvp`: the product spec.
@@ -165,7 +170,7 @@ Compared with prompting feature by feature, the spec made the failure visible: t
 
 Tests for the hook scripts and the hook files are in `tests/test_hooks.py`.
 
-**Custom agent.** `.kiro/agents/claims-auditor.json` is a read-only reviewer for public text: every number must trace to `docs/MEASUREMENTS.md`, no forbidden claims, SGSeg reuse disclosed, every Kiro claim backed by a file. Run it with `kiro-cli chat --agent claims-auditor`. <!-- AUDIT-RUN: link to the run log here. -->
+**Custom agent.** `.kiro/agents/claims-auditor.json` is a read-only reviewer for public text: every number must trace to `docs/MEASUREMENTS.md`, no forbidden claims, SGSeg reuse disclosed, every Kiro claim backed by a file. Run it with `kiro-cli chat --agent claims-auditor`. Its first run on this README (headless, `kiro-cli chat --v3 --no-interactive --agent claims-auditor`) failed it with 7 items, including a wrong start date and two unbacked claims; the run and the fixes are in [`docs/kiro/claims-audit-2026-11-12.md`](docs/kiro/claims-audit-2026-11-12.md).
 
 **Property-based testing.** `hypothesis` tests in `tests/test_qc_service_pbt.py`. They caught a bug the unit tests missed: in the first QC design, *adding* background pixels to an exact mask raised its score (583 of 900 scanned cases), because the envelope spreads target energy past the target's edge. The same tests then defined the redesign's two stated resolution limits.
 
@@ -175,7 +180,7 @@ Tests for the hook scripts and the hook files are in `tests/test_hooks.py`.
 
 ## Built during Kiroween, and what came before
 
-This repository started on 2026-11-09. Part of it comes from **SGSeg**, the author's earlier seismic segmentation tool (begun in June 2026, part of the author's PhD work, solely the author's), which is disclosed here as required by the rules:
+This repository started on 2026-11-09 (first commit, `git log`). Part of it comes from **SGSeg**, the author's earlier seismic segmentation tool (begun in June 2026, part of the author's PhD work, solely the author's), which is disclosed here as required by the rules:
 
 - **From SGSeg:** the slice viewer and its SEG-Y / Zarr / VDS / NumPy loaders, the basic SAM3 embed-and-predict calls and point picking, the first GeoJSON / CSV export, IoU / Dice validation, the LLM assistant, SQLite sessions and local backup.
 - **Built for this entry (from 2026-11-09):** the synthetic model and its ground truth; the low-frequency view and the noisy / clean comparison; the measurement scripts; server-side SAM3 rendering; the volume mask, propagation and survey map; the label-free QC, the refine loop, its API, log and panel; the rewritten export with the QC log; the no-weights mode; the English UI; and the whole `/.kiro` workflow.

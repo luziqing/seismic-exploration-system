@@ -141,7 +141,7 @@ function updateSamBadge(s) {
         el.className = 'sam-badge missing';
         el.textContent = 'SAM3: weights missing';
         el.title = `Download sam3.pt from ${s.weights_source} (request access, Meta SAM License), ` +
-                   `place it at ${s.weights_path} and restart the server. See README "SAM3 weights".`;
+                   `place it at ${s.weights_path} and restart the server. See README, Run it, step 4.`;
     } else if (samState.device === 'cpu') {
         el.className = 'sam-badge cpu';
         el.textContent = 'SAM3: CPU';
