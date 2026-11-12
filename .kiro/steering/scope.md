@@ -20,7 +20,7 @@ A geophysicist or judge clones the public repo, runs one setup command and opens
 |---|---|
 | Intended platform (stated in the submission) | Desktop web app: Python 3.10+ server on Windows 10/11 or Linux, opened in a current desktop browser. NVIDIA GPU recommended; CPU works but each new slice takes ~15 s to encode (measured 11-12, Core Ultra 9 285K: ~13.5 s) |
 | Judge access | **Test build** = the public GitHub repo plus testing instructions (the rules allow "a website, functioning demo, or a test build"). No hosted instance (owner, 11-12) |
-| SAM weights | `sam3.pt`, licensed to the owner. Never committed. The README tells judges how to obtain the weights themselves; without weights the app runs in a clearly labelled no-SAM mode |
+| SAM weights | `sam3.pt` under the SAM License (Meta). Never committed. The README points judges to Meta's official Hugging Face release and the owner's Google Drive mirror (with the licence file), plus size and SHA-256 (§9); without weights the app runs in a clearly labelled no-SAM mode |
 | Development and recording | Local or LAN GPU machines only. CPU and hosting are not optimised |
 | Availability | Tag `v1.0-submission` on `main`. After 12-04, `main` changes only for fixes that keep the tagged behaviour, until 2027-01-29 |
 
@@ -40,7 +40,7 @@ Because the rules say judges "may choose to judge based solely on the text descr
 | S6 | UI: round-by-round QC panel (score per round, corrective points drawn, best round marked) | P0 | Frame V5 can be recorded live | 11-22 |
 | S7 | Degraded paths: no weights → status bar says what is missing and where to get it, browse / low-freq / export keep working; CPU only → visible "encoding on CPU" state; `/propagate` and SAM endpoints return 503 when weights are missing | P0 | Manual run with weights moved away; no blank page, no unhandled 500 | 11-24 |
 | S8 | English UI: every button, label, status and error string in the demo flow | P0 | `grep` for CJK characters in `index.html` and `src/static/js/` returns nothing user-visible | 11-25 |
-| S9 | Test build: README "Run it" section (prerequisites, `pip install -r requirements.txt`, `npm run data:gen`, weights placement, `npm start`), and `npm run verify` running check + pytest + data verify | P0 | E2 passes | 11-26 |
+| S9 | Test build: README "Run it" section (prerequisites incl. supported Python 3.10–3.12 and whether Node.js is needed, venv creation, `pip install -r requirements.txt`, data generation, weights download + checksum, start), and `npm run verify` running check + pytest + data verify, with a plain-Python equivalent | P0 | E2 passes on `gpu4090` | 11-26 |
 | S10 | Export: GeoJSON + CSV polygons + QC round log (JSON) | P0 | Files open and match the on-screen result | 11-26 |
 | S11 | Kiro evidence (see §5) | P0 | Each write-up topic has a real artefact or an honest "not used" | 11-28 |
 | S12 | Submission: video ≤165 s, English README final with SGSeg disclosure, Devpost text and testing instructions, `kiro` merged into `main`, tag | P0 | `competition.md` checklist all ticked | 12-03 |
@@ -113,18 +113,24 @@ Rule from `docs/PROJECT_PLAN.md`: if any criterion looks below 7/10, fix that cr
 
 | ID | Decision | Status |
 |---|---|---|
-| D1 | Reuse of SGSeg (begun June 2026) | **Resolved by the rules text (11-12):** pre-existing code is allowed if disclosed, and the work described must be built in the period. README and Devpost text list exactly what came from SGSeg and what was built after 10-30, and describe only the new work as the project. Still needs the owner's confirmation that SGSeg is solely the owner's (see §9) |
+| D1 | Reuse of SGSeg (begun June 2026) | **Resolved 11-12.** Rules allow pre-existing code if disclosed, and the work described must be built in the period. Owner confirms SGSeg is solely theirs (part of their PhD thesis). README and Devpost text list exactly what came from SGSeg and what was built after 10-30, and describe only the new work as the project |
 | D2 | MVP Requirement 4.1 narrowed from "fault continuity + horizon closure error" to "label-free deep-target QC + fault continuity" | **Adopted 11-12** under the owner's instruction to fix the boundary. Reason: the deep target is the demo's subject and neither original metric measures it; a loop driven by ground truth would not work on real data; horizon closure needs multi-slice horizon picks that do not exist. Owner may reverse |
 | D3 | No hosted instance; access through a test build | **Decided by owner 11-12**; consistent with the rules' "test build" option |
 | D4 | Propagation in the video | **Adopted:** at most ~10 s, after V2–V5 are recorded |
 
-## 9. Owner actions (agents cannot do these)
+## 9. Owner actions and environment facts
 
-| Action | Why | By |
-|---|---|---|
-| Confirm SGSeg is solely yours (not an employer's or a co-author's) and under an open-source licence | Rules: submission must be solely owned by the entrant; open-source reuse must respect its licence | 11-14 |
-| Request Kiro credits through the Credit Request Form | Deadline Tue 12-01 12:00 PT; allow 48 business hours | 11-20 |
-| Confirm the GitHub repo `luziqing/seismic-exploration-system` will be public, and approve pushes of `kiro` | Public repo required; agents only push with your yes | 11-26 |
-| Name the source judges should use to get SAM3 weights, and confirm its licence lets them use the weights for testing | Rules: authorised third-party use; README testing instructions | 11-26 |
-| Second machine for E2 | Clean-clone check | 11-29 |
-| YouTube upload (public) and Devpost submission | Account actions | 12-03 |
+| Item | Status (11-12) |
+|---|---|
+| SGSeg ownership | **Done.** Solely the owner's, part of their PhD thesis |
+| Kiro credits | **Done.** Received |
+| Public repo `luziqing/seismic-exploration-system` | **Done.** Public; owner allows pushes at any time. Agents push `kiro` with fast-forward only, never force; `main` is updated at S12 |
+| SAM3 weights for judges | **Decided:** primary source is Meta's official release (Hugging Face `facebook/sam3`, gated: request access). The owner will provide a Google Drive mirror; the SAM License (1.b.i) allows redistribution only under its terms and with a copy of the licence, so the Drive folder must contain `LICENSE` (SAM License) next to `sam3.pt`. The README gives both links, the expected file name `data/weights/sam3.pt`, size 3,450,062,241 bytes and SHA-256 `9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e`. **Pending:** the Drive URL |
+| Second machine for E2 | **Available:** `ssh gpu4090` (192.168.204.76, user `yuzu`, key `~/.ssh/id_ed25519_huawei`, already in `~/.ssh/config`). Windows 10 Pro for Workstations, RTX 4090 24 GB (driver 617.14), 128 GB RAM, 464 GB free on C:. Has Git; default Python is **3.14**, Python 3.12 available through `uv`; **no Node.js / npm**. Agents may use it only for E2/E6 test runs in a fresh folder under the user's home, and must not install system-wide software without asking |
+| YouTube upload (public) and Devpost submission | Owner, by 12-03 |
+
+### What the second machine already tells us (feeds S9 / E2)
+
+- `requirements.txt` pins `numpy<2.0`; NumPy 1.26 has no wheels for Python 3.14, so `pip install` with the default Python on a fresh machine will fail. The README must state the supported Python range (3.10–3.12) and show how to create a venv with it.
+- The npm scripts need Node.js, which a geophysicist's machine may not have. The README must either list Node as a prerequisite or give the plain Python commands first.
+- SSH sessions on that machine run PowerShell, not a POSIX shell; E2 scripts must be PowerShell.
