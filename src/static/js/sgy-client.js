@@ -321,7 +321,7 @@ async function loadAndRenderSlice(dir, index) {
         updateAxes();  // 更新坐标轴标注，确保 IL/XL 范围正确显示
         // logits 切换: 新切片清旧 mask 和 embedding
         logitsMap = null; logitsWidth = 0; logitsHeight = 0;
-        embeddingId = null;  // 新切片需要重新计算 embedding
+        embeddingId = null; embeddingImageSize = null;  // 新切片需要重新计算 embedding
         drawSeismic();
         loadVolumeMaskOverlay(dir, index);  // 若该切片已有体 mask (含传播结果) 则叠加显示
         updateSubtitle(dir, index);

@@ -2,7 +2,6 @@
 """跨切片传播端到端 (真实 SAM3/GPU): 在 inline 种子切片点 1 个点 -> 传播 -> 对比三维真值。
 需先启动服务器: python src/server.py
 """
-import io
 import os
 import sys
 import time
@@ -10,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import requests
-from PIL import Image
 
 BASE = os.environ.get("SAM3_URL", "http://127.0.0.1:9339")  # 不用 localhost: Windows 上先试 IPv6 会多等约 2 s
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,26 +24,24 @@ def iou(a, b):
 
 
 def seed_by_click():
-    amp = np.load(VOL / "amplitude.npy", mmap_mode="r")
+    """Seed exactly as the browser does since B1: server-rendered embed + click inside the target."""
     truth = np.load(VOL / "truth" / "deep_target_mask.npy", mmap_mode="r")
-    sl = np.asarray(amp[SEED_IL]).T
     gt = np.asarray(truth[SEED_IL]).T.astype(bool)
-    lo, hi = np.percentile(sl, [2, 98])
-    g = (np.clip((sl - lo) / (hi - lo + 1e-9), 0, 1) * 255).astype(np.uint8)
-    img = Image.fromarray(g).resize((g.shape[1] * 16, g.shape[0] * 4), Image.BILINEAR).convert("RGB")
-    gt_big = np.array(Image.fromarray(gt.astype(np.uint8) * 255).resize(img.size, Image.NEAREST)) > 127
-    ys, xs = np.nonzero(gt_big)
-    py, px = int(np.median(ys)), int(np.median(xs))
-    if not gt_big[py, px]:
-        py, px = int(ys[len(ys) // 2]), int(xs[len(xs) // 2])
-    buf = io.BytesIO(); img.save(buf, "PNG")
-    emb = requests.post(f"{BASE}/api/embed", files={"file": ("s.png", buf.getvalue(), "image/png")}, timeout=600).json()
+    rows, cols = np.nonzero(gt)
+    k = len(rows) // 2
+    r0, c0 = int(np.median(rows)), int(np.median(cols))
+    if not gt[r0, c0]:
+        r0, c0 = int(rows[k]), int(cols[k])
+    emb = requests.post(f"{BASE}/api/npy/{VOLNAME}/embed",
+                        json={"direction": "inline", "index": SEED_IL}, timeout=600).json()
+    sx, sy = emb["scale"]
     out = requests.post(f"{BASE}/api/predict", json={"embedding_id": emb["embedding_id"],
-                        "points": [[px, py]], "labels": [1]}, timeout=600).json()
+                        "points": [[(c0 + 0.5) * sx, (r0 + 0.5) * sy]], "labels": [1]}, timeout=600).json()
     w = requests.post(f"{BASE}/api/npy/{VOLNAME}/mask", json={
         "direction": "inline", "index": SEED_IL, "mask": out["mask"], "mask_name": MASK,
         "mode": "replace", "score": out["scores"][0]}, timeout=60)
     assert w.status_code == 200, w.text
+    assert w.json()["slice_voxels"] > 0, "empty seed from the UI embed path (regression of bug B1)"
     print(f"种子 inline {SEED_IL}: score={out['scores'][0]:.3f} voxels={w.json()['slice_voxels']}")
 
 

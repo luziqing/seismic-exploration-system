@@ -472,6 +472,40 @@ def _npy_binary_response(data: np.ndarray) -> Response:
     )
 
 
+class NpySliceEmbedRequest(BaseModel):
+    direction: str
+    index: int
+    mode: str = "raw"   # raw | lowfreq
+
+
+@app.post("/api/npy/{vol_name}/embed")
+async def npy_embed_slice(vol_name: str, req: NpySliceEmbedRequest):
+    """
+    Embed a slice rendered on the server (grey 2-98 % stretch, uniform integer upscale) for SAM.
+
+    The browser must not embed a canvas screenshot: it carries pick markers, the display
+    colour map and SAM overlays, and SAM segments the marker instead of the geology (bug B1).
+    Point prompts for this embedding are sent as image pixels: x = (col + 0.5) * scale[0],
+    y = (row + 0.5) * scale[1], where (row, col) is the position in the native slice grid.
+    """
+    npy_dir = _npy_vol_dir(vol_name)
+    if req.index < 0:
+        raise HTTPException(400, f"Index must not be negative: {req.index}")
+    try:
+        data = _npy_slice_array(npy_dir, req.direction, req.index, req.mode)
+    except (IndexError, ValueError) as e:
+        raise HTTPException(400, str(e))
+    img, sy, sx = propagation_service.render_slice_image(data)
+    save_path = UPLOAD_DIR / f"{uuid.uuid4().hex}.png"
+    img.save(save_path, "PNG")
+    try:
+        emb = await asyncio.to_thread(sam_service.embed_image, str(save_path))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {**emb, "grid_shape": list(data.shape), "scale": [sx, sy],
+            "direction": req.direction, "index": req.index, "mode": req.mode}
+
+
 @app.get("/api/npy/list")
 async def list_npy():
     """列出所有 NumPy 卷"""
@@ -501,6 +535,20 @@ def _npy_dt_us(npy_dir: Path) -> int:
         return lowfreq_service.DEFAULT_DT_US
 
 
+def _npy_slice_array(npy_dir: Path, direction: str, index: int, mode: str) -> np.ndarray:
+    """Raw or low-frequency slice in slice-image orientation. Raises IndexError / ValueError on bad input."""
+    if mode not in lowfreq_service.SLICE_MODES:
+        raise ValueError(f"Unknown mode: {mode!r} (expected one of {', '.join(lowfreq_service.SLICE_MODES)})")
+    if direction not in _NPY_READERS:
+        raise ValueError(f"Unknown direction: {direction!r}")
+    if mode == "lowfreq" and direction == "timeslice":
+        return lowfreq_service.lowfreq_timeslice(str(npy_dir / "amplitude.npy"), index, _npy_dt_us(npy_dir))
+    data = _NPY_READERS[direction](str(npy_dir), index)
+    if mode == "lowfreq":  # inline / crossline: rows are samples, filter along axis 0
+        data = lowfreq_service.condition_slice(data, dt_us=_npy_dt_us(npy_dir), time_axis=0)
+    return data
+
+
 def _npy_slice_response(vol_name: str, direction: str, index: int, mode: str) -> Response:
     """Read one slice (raw or low-frequency conditioned) as binary float32 + X-Rows/X-Cols."""
     if mode not in lowfreq_service.SLICE_MODES:
@@ -511,13 +559,7 @@ def _npy_slice_response(vol_name: str, direction: str, index: int, mode: str) ->
     if not npy_dir.exists():
         raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
     try:
-        if mode == "lowfreq" and direction == "timeslice":
-            data = lowfreq_service.lowfreq_timeslice(str(npy_dir / "amplitude.npy"), index, _npy_dt_us(npy_dir))
-        else:
-            data = _NPY_READERS[direction](str(npy_dir), index)
-            if mode == "lowfreq":  # inline / crossline: rows are samples, filter along axis 0
-                data = lowfreq_service.condition_slice(data, dt_us=_npy_dt_us(npy_dir), time_axis=0)
-        return _npy_binary_response(data)
+        return _npy_binary_response(_npy_slice_array(npy_dir, direction, index, mode))
     except (IndexError, ValueError) as e:
         raise HTTPException(400, str(e))
     except Exception as e:

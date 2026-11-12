@@ -28,6 +28,7 @@ let logitsMode = true;
 let pickMode = 'exclude';
 let isInferring = false;
 let embeddingId = null;
+let embeddingImageSize = null;  // [w, h] of the image behind embeddingId
 let logitsMap = null;
 let logitsWidth = 0;
 let logitsHeight = 0;
@@ -240,7 +241,7 @@ if (btnReset) {
         // 清空拾取点和 mask
         picksBySlice.clear();
         logitsMap = null; logitsWidth = 0; logitsHeight = 0;
-        embeddingId = null;
+        embeddingId = null; embeddingImageSize = null;
         currentSessionId = null;
         clearBackup();
 

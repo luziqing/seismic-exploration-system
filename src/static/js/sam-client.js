@@ -19,6 +19,7 @@ async function computeEmbedding() {
         if (!resp.ok) throw new Error((await resp.json()).detail);
         const data = await resp.json();
         embeddingId = data.embedding_id;
+        embeddingImageSize = data.image_size;
         setStatus('ready', 'SAM3 就绪');
     } catch(e) {
         setStatus('error', '嵌入失败: ' + e.message);
@@ -45,29 +46,42 @@ async function runSAMInference() {
     setStatus('loading', '⏳ SAM 推理中...');
 
     try {
-        // 1. 如果没有 embedding，先自动计算当前 canvas 内容的 embedding
+        // 1. Embed the current slice once. NPY volumes: the server renders the slice itself, so the
+        //    embedding never contains pick markers, overlays or the display colour map (bug B1).
+        //    Other sources: embed the clean seismic rendering (seismicImageData), never the live canvas.
         if (!embeddingId) {
-            setStatus('loading', '📐 计算图像嵌入...');
-            const tempC = document.createElement('canvas');
-            tempC.width = canvas.width;
-            tempC.height = canvas.height;
-            tempC.getContext('2d').drawImage(canvas, 0, 0);
-            const blob = await new Promise(r => tempC.toBlob(r, 'image/png'));
-            const form = new FormData();
-            form.append('file', blob, 'slice.png');
-            const resp = await fetch('/api/embed', {method:'POST', body:form});
+            setStatus('loading', '📐 Encoding slice for SAM...');
+            let resp;
+            if (volInfo.source === 'api/npy' && volInfo.name) {
+                resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/embed`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({direction: curDir, index: curIndex, mode: 'raw'})
+                });
+            } else {
+                const tempC = document.createElement('canvas');
+                const src = seismicImageData;
+                tempC.width = src ? src.width : canvas.width;
+                tempC.height = src ? src.height : canvas.height;
+                if (src) tempC.getContext('2d').putImageData(src, 0, 0);
+                else tempC.getContext('2d').drawImage(canvas, 0, 0);
+                const blob = await new Promise(r => tempC.toBlob(r, 'image/png'));
+                const form = new FormData();
+                form.append('file', blob, 'slice.png');
+                resp = await fetch('/api/embed', {method:'POST', body:form});
+            }
             if (!resp.ok) throw new Error((await resp.json()).detail);
             const data = await resp.json();
             embeddingId = data.embedding_id;
-            setStatus('loading', '✅ 嵌入完成，开始推理...');
+            embeddingImageSize = data.image_size;   // [w, h] of the embedded image
+            setStatus('loading', '✅ Encoded, running SAM...');
         }
 
-        // 2. 将拾取点坐标映射到图像像素坐标 (归一化坐标 × 当前 canvas)
-        const imgW = canvas.width;
-        const imgH = canvas.height;
+        // 2. Map picks (normalised to the displayed slice) to pixels of the embedded image
+        const imgW = embeddingImageSize ? embeddingImageSize[0] : canvas.width;
+        const imgH = embeddingImageSize ? embeddingImageSize[1] : canvas.height;
         const points = picks.map(p => {
             if (p.nx != null) return [p.nx * imgW, p.ny * imgH];
-            return [p.x, p.y];
+            return [p.x / canvas.width * imgW, p.y / canvas.height * imgH];
         });
         const labels = picks.map(p => p.label);
 
