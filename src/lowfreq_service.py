@@ -14,6 +14,8 @@ The underlying raw volume stored on disk is NEVER modified.
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
+from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -146,6 +148,44 @@ def condition_slice(
         filtered *= normalization_scale
 
     return filtered.astype(np.float32, copy=False)
+
+
+SLICE_MODES = ("raw", "lowfreq")
+# Timeslice conditioning filters every trace of the volume. Above this size we refuse
+# rather than load a large volume into memory per request (demo volumes are ~2.4 MB).
+MAX_TIMESLICE_VOLUME_BYTES: int = 256 * 1024 * 1024
+
+
+@lru_cache(maxsize=2)
+def _conditioned_volume(amplitude_path: str, mtime_ns: int, dt_us: int) -> np.ndarray:
+    """Low-frequency conditioned copy of a whole volume, cached per file version and dt."""
+    vol = np.load(amplitude_path, mmap_mode="r")
+    if vol.ndim != 3:
+        raise ValueError(f"Expected a 3-D volume, got shape {vol.shape}")
+    nbytes = int(np.prod(vol.shape)) * 4
+    if nbytes > MAX_TIMESLICE_VOLUME_BYTES:
+        raise ValueError(
+            f"Volume is {nbytes / 2**20:.0f} MB; low-frequency timeslices are limited to "
+            f"{MAX_TIMESLICE_VOLUME_BYTES / 2**20:.0f} MB volumes")
+    n_il, n_xl, n_s = vol.shape
+    traces = np.asarray(vol, dtype=np.float32).reshape(n_il * n_xl, n_s)
+    out = condition_slice(traces, dt_us=dt_us, time_axis=1).reshape(n_il, n_xl, n_s)
+    out.setflags(write=False)
+    return out
+
+
+def lowfreq_timeslice(amplitude_path: str, sample_index: int, dt_us: int = DEFAULT_DT_US) -> np.ndarray:
+    """
+    Timeslice `sample_index` of the low-frequency conditioned volume, shape (nIL, nXL).
+
+    A timeslice has no time axis of its own, so every trace is filtered along time first
+    and the sample is taken afterwards. The file on disk is only read.
+    """
+    p = Path(amplitude_path)
+    vol = _conditioned_volume(str(p), p.stat().st_mtime_ns, int(dt_us))
+    if not 0 <= sample_index < vol.shape[2]:
+        raise IndexError(f"TimeSlice index {sample_index} out of range [0, {vol.shape[2] - 1}]")
+    return np.array(vol[:, :, sample_index], dtype=np.float32)
 
 
 def get_filter_metadata() -> dict:

@@ -47,6 +47,7 @@ import sam_service
 import sgy_service
 import npy_service
 import zarr_service
+import lowfreq_service
 import volume_mask_service
 import propagation_service
 import validation_service
@@ -486,56 +487,59 @@ async def npy_metadata(vol_name: str):
     return npy_service.get_metadata(str(npy_dir))
 
 
-@app.get("/api/npy/{vol_name}/slice/inline/{il_index}")
-async def npy_read_inline(vol_name: str, il_index: int):
-    """读取 Inline 切片 (二进制 float32)"""
-    if il_index < 0:
-        raise HTTPException(400, f"索引不能为负数: {il_index}")
+_NPY_READERS = {
+    "inline": npy_service.read_inline,
+    "crossline": npy_service.read_crossline,
+    "timeslice": npy_service.read_timeslice,
+}
+
+
+def _npy_dt_us(npy_dir: Path) -> int:
+    try:
+        return int(npy_service.get_metadata(str(npy_dir)).get("dt_us") or lowfreq_service.DEFAULT_DT_US)
+    except FileNotFoundError:
+        return lowfreq_service.DEFAULT_DT_US
+
+
+def _npy_slice_response(vol_name: str, direction: str, index: int, mode: str) -> Response:
+    """Read one slice (raw or low-frequency conditioned) as binary float32 + X-Rows/X-Cols."""
+    if mode not in lowfreq_service.SLICE_MODES:
+        raise HTTPException(400, f"Unknown mode: {mode!r} (expected one of {', '.join(lowfreq_service.SLICE_MODES)})")
+    if index < 0:
+        raise HTTPException(400, f"索引不能为负数: {index}")
     npy_dir = DATA_DIR / "npy" / vol_name
     if not npy_dir.exists():
         raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
     try:
-        data = npy_service.read_inline(str(npy_dir), il_index)
+        if mode == "lowfreq" and direction == "timeslice":
+            data = lowfreq_service.lowfreq_timeslice(str(npy_dir / "amplitude.npy"), index, _npy_dt_us(npy_dir))
+        else:
+            data = _NPY_READERS[direction](str(npy_dir), index)
+            if mode == "lowfreq":  # inline / crossline: rows are samples, filter along axis 0
+                data = lowfreq_service.condition_slice(data, dt_us=_npy_dt_us(npy_dir), time_axis=0)
         return _npy_binary_response(data)
-    except IndexError as e:
+    except (IndexError, ValueError) as e:
         raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.get("/api/npy/{vol_name}/slice/inline/{il_index}")
+async def npy_read_inline(vol_name: str, il_index: int, mode: str = "raw"):
+    """读取 Inline 切片 (二进制 float32); mode=lowfreq 返回低频条件化结果, 原始体不变"""
+    return _npy_slice_response(vol_name, "inline", il_index, mode)
 
 
 @app.get("/api/npy/{vol_name}/slice/crossline/{xl_index}")
-async def npy_read_crossline(vol_name: str, xl_index: int):
-    """读取 Crossline 切片 (二进制 float32)"""
-    if xl_index < 0:
-        raise HTTPException(400, f"索引不能为负数: {xl_index}")
-    npy_dir = DATA_DIR / "npy" / vol_name
-    if not npy_dir.exists():
-        raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
-    try:
-        data = npy_service.read_crossline(str(npy_dir), xl_index)
-        return _npy_binary_response(data)
-    except IndexError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(500, str(e))
+async def npy_read_crossline(vol_name: str, xl_index: int, mode: str = "raw"):
+    """读取 Crossline 切片 (二进制 float32); mode=lowfreq 同上"""
+    return _npy_slice_response(vol_name, "crossline", xl_index, mode)
 
 
 @app.get("/api/npy/{vol_name}/slice/timeslice/{sample_index}")
-async def npy_read_timeslice(vol_name: str, sample_index: int):
-    """读取 TimeSlice 切片 (二进制 float32)"""
-    if sample_index < 0:
-        raise HTTPException(400, f"索引不能为负数: {sample_index}")
-    npy_dir = DATA_DIR / "npy" / vol_name
-    if not npy_dir.exists():
-        raise HTTPException(404, f"NumPy 卷不存在: {vol_name}")
-    try:
-        data = npy_service.read_timeslice(str(npy_dir), sample_index)
-        return _npy_binary_response(data)
-    except IndexError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
+async def npy_read_timeslice(vol_name: str, sample_index: int, mode: str = "raw"):
+    """读取 TimeSlice 切片 (二进制 float32); mode=lowfreq 先沿时间轴滤波整道再取样点"""
+    return _npy_slice_response(vol_name, "timeslice", sample_index, mode)
 
 # ══════════════════════════════════════════════════════════════
 # 三维体 mask API — SAM 切片 mask 回映射并写入体素 mask

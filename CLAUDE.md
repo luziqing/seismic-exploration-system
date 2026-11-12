@@ -58,7 +58,7 @@
 | 跨切片传播：用上一张 mask 自动生成点提示，逐张推理，IoU 防漂移 | `src/propagation_service.py`、`tests/test_propagation.py` | 已提交（`5d7499f`）；spec 同上；新增 `scipy` 依赖 |
 | 体 mask / 传播 API：`POST /api/npy/{vol}/mask`、`POST .../propagate`、`GET .../masks`、`GET .../mask/{name}/info`、`GET .../mask/{name}/slice/{dir}/{i}` | `src/server.py` | **未提交** |
 | 前端"🔁 传播"按钮 + 范围设置面板；SAM 结果自动写入体 mask | `index.html`、`sam-client.js` | **未提交** |
-| `?mode=lowfreq` 切片参数 | `src/server.py` | **缺失** |
+| `?mode=raw|lowfreq` 切片参数 | `src/server.py`、`tests/test_slice_modes.py` | 已实现（11-12，scope S1） |
 | Raw / Low-freq 切换与并排对照 | 前端 | **缺失** |
 | 高噪 / 低噪一键对照（H2 的 UI 表达） | 前端 | **缺失**（目前只能靠卷切换器手动切） |
 | `qc_service.py`：断层连续性、层位闭合差 | — | **缺失** |

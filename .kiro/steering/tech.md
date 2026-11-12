@@ -30,6 +30,7 @@ HTTP API (`src/server.py`):
 - `GET /api/npy/{vol}/slice/inline/{i}` (binary float32)
 - `GET /api/npy/{vol}/slice/crossline/{j}`
 - `GET /api/npy/{vol}/slice/timeslice/{k}`
+- All three accept `?mode=raw|lowfreq` (default `raw`). `lowfreq` applies `lowfreq_service` along the time axis using `dt_us` from `meta.json`; a timeslice filters every trace first (volumes up to 256 MB). Same binary contract either way.
 
 Volume mask and propagation (spec: `.kiro/specs/volume-propagation/`):
 - `POST /api/npy/{vol}/mask` — write one slice's SAM mask into `data/npy/{vol}/masks/<name>.npy` (bool, same shape as the volume) plus `<name>.json` provenance
@@ -39,7 +40,7 @@ Volume mask and propagation (spec: `.kiro/specs/volume-propagation/`):
 
 ## Planned additions (see the spec)
 
-- `src/lowfreq_service.py` exists (spectral weighting on a 2-D slice); still to do: route it through the slice endpoints as `?mode=raw|lowfreq` and add the UI toggle. Never destroy the original volume — keep the raw slice for comparison.
+- `src/lowfreq_service.py` is routed through the slice endpoints (`?mode=lowfreq`); still to do: the UI toggle and side-by-side view (scope S2). Never destroy the original volume — keep the raw slice for comparison.
 - `src/qc_service.py`: label-free deep-target QC (edge leakage, envelope contrast) and fault continuity, consumed by a prompt-refinement loop of at most 3 rounds (spec: `.kiro/specs/qc-refine-loop/`). Horizon closure error is deferred (`scope.md` D2).
 - `src/validation_service.py` already provides IoU / Dice / Precision / Recall against ground-truth masks. Reuse it; do not re-implement metrics.
 
