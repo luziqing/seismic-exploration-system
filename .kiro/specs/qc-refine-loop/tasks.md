@@ -83,15 +83,24 @@ In-process, click = interior point of the truth slice, inlines 16 / 20 / 24, `wr
 
 ## Wave 4 — UI panel (S6; Requirement 5) — due 11-22
 
-- [ ] `src/static/js/refine-panel.js`: Auto-refine checkbox (default on for NPY volumes), round table (score, Δ, correction, ★ best, truth IoU as reference), stop reason in English, round selection redraws mask and prompts, corrective points drawn as hollow diamonds
-- [ ] Wire into `runSAMInference`; refresh the survey-map footprint after the best mask is written
-- [ ] Headless-Chrome run: click → Auto-refine → table with ≥ 1 round → select each round → canvas changes; no JS errors. Frame V5 recordable
+- [x] (2026-11-13) `src/static/js/refine-panel.js`: Auto-refine checkbox (default on for NPY volumes), round table (score, Δ, correction, ★ best, truth IoU as reference), stop reason in English, round selection redraws mask and prompts, corrective points drawn as hollow diamonds
+- [x] (2026-11-13) Wire into `runSAMInference`; refresh the survey-map footprint after the best mask is written
+- [x] (2026-11-13; clean IL 24: 3 rounds, masks 1580 / 909 / 778 px per round, 2 diamonds; noisy IL 21: gate message; Auto-refine off -> /predict; time slice disables the control; no JS errors) Headless-Chrome run: click → Auto-refine → table with ≥ 1 round → select each round → canvas changes; no JS errors. Frame V5 recordable
 
 ## Wave 5 — Measurement and GPU checks (Requirement 6) — due 11-23
 
-- [ ] `scripts/measure_refine.py`: fixed inlines through the deep target, declared simulated-click rule, raw and low-freq views; per round QC score and truth IoU; single-round SAM IoU for comparison; list every case where the loop does not improve truth IoU. Byte-identical reruns on the same GPU. This also answers whether SAM segments the deep target better on the low-frequency view
-- [ ] `scripts/test_refine_e2e.py`: real SAM run completes, log replays through `GET /api/refine/{run_id}`
-- [ ] Results and allowed wording in `docs/MEASUREMENTS.md`; nothing about the loop in README or video before this
+- [x] (2026-11-13, run once; two reruns byte-identical text + JSON on the RTX 4090 D) `scripts/measure_refine.py`: fixed inlines through the deep target, declared simulated-click rule, raw and low-freq views; per round QC score and truth IoU; single-round SAM IoU for comparison; list every case where the loop does not improve truth IoU. Byte-identical reruns on the same GPU. This also answers whether SAM segments the deep target better on the low-frequency view
+- [x] (2026-11-13: clean il 23 3 rounds, noisy il 20 `qc_unreliable`, both replay identical) `scripts/test_refine_e2e.py`: real SAM run completes, log replays through `GET /api/refine/{run_id}`
+- [x] (2026-11-13) Results and allowed wording in `docs/MEASUREMENTS.md`; nothing about the loop in README or video before this
+
+### Wave 5 result and the UI defaults it set, 2026-11-13
+
+`scripts/measure_refine.py`, one click at the truth interior point, 19 inlines per volume (full table in `docs/MEASUREMENTS.md`):
+
+- SAM view: **raw**. Noisy volume IoU 0.43 (raw) vs 0.06 (low-freq). On the clean volume low-freq gives a better round 1 (0.885 vs 0.798) but the raw-view QC then makes the loop worse there (1 better / 4 worse), so the loop and the plain SAM button both segment the raw slice whatever is displayed. This reverses the S2 behaviour "SAM on the low-freq view embeds `mode: lowfreq`".
+- Auto-refine: **on**. Clean / raw: mean IoU 0.798 -> 0.814, 9 better / 3 worse / 7 unchanged. Limitation recorded, not redesigned: in 3 cases the QC kept a round that is worse against truth (il 16, 28, 29).
+- Noisy: gate stopped 18 / 19 runs; il 27 sat exactly at the limit (0.500) and ran.
+- UI change found by the browser run: the panel was first placed bottom-left and covered the deep target, which blocked clicks on it; moved to top-left.
 
 ## Order and limits (scope.md §0, 2026-11-12)
 
