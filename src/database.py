@@ -236,13 +236,12 @@ def insert_point(session_id: int, il: float, xl: float, depth: float,
 def insert_points_batch(session_id: int, points: list[dict]) -> int:
     """批量插入点位, 返回插入数量"""
     conn = get_conn()
-    conn.executemany(
+    cur = conn.executemany(
         """INSERT INTO points (session_id, il, xl, depth, px_x, px_y, label)
            VALUES (:session_id, :il, :xl, :depth, :px_x, :px_y, :label)""",
         [{**p, "session_id": session_id} for p in points]
     )
-    count = conn.execute(
-        "SELECT changes()").fetchone()[0]
+    count = cur.rowcount
     conn.commit()
     conn.close()
     return count
