@@ -6,6 +6,8 @@ SAM3 推理服务 — 模型加载、图像嵌入、点提示分割
 """
 
 import logging
+import threading
+from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +23,13 @@ _model_path: str | None = None
 _selected_device = "auto"    # auto | cpu | cuda:0 | cuda:1 ...
 _EMBEDDING_MAX = 50          # 最大嵌入缓存数量
 _embeddings: dict = {}  # {embedding_id: {"path": str, "size": tuple}}
+
+# 图像编码器特征缓存 (GPU 张量, 每条约数 MB): 点提示只需过解码器, 不必重复编码图像。
+# 只保留最近 _FEATURE_MAX 条, 被淘汰者在 predict 时按需重新编码。
+_FEATURE_MAX = 8
+_features: "OrderedDict[str, object]" = OrderedDict()
+# predictor 内部状态 (features/dataset) 是共享可变的, 推理必须串行
+_infer_lock = threading.RLock()
 
 
 def is_loaded() -> bool:
@@ -160,12 +169,13 @@ def embed_image(image_path: str) -> dict:
     ensure_loaded()  # 懒加载：首次调用时才加载模型
     t_load = time.perf_counter() - t0
 
-    img = Image.open(image_path).convert("RGB")
-    img_size = img.size  # (w, h)
+    with Image.open(image_path) as im:
+        img_size = im.size  # (w, h)
 
-    # 用 predict 触发图像嵌入 (首次会初始化 predictor)
+    # 只做一次图像编码并缓存特征 (原先这里跑了一次无提示"全图分割"后丢弃结果)
     t1 = time.perf_counter()
-    _model.predict(source=image_path, verbose=False)
+    with _infer_lock:
+        feats = _encode_image(image_path)
     t_infer = time.perf_counter() - t1
 
     embedding_id = uuid.uuid4().hex[:12]
@@ -173,12 +183,14 @@ def embed_image(image_path: str) -> dict:
         "path": str(image_path),
         "size": img_size,
     }
+    _store_features(embedding_id, feats)
     # LRU 淘汰：超过上限时删除最早的条目
     while len(_embeddings) > _EMBEDDING_MAX:
         oldest_key = next(iter(_embeddings))
         del _embeddings[oldest_key]
+        _features.pop(oldest_key, None)
         logger.debug("淘汰旧嵌入: %s", oldest_key)
-    logger.info("图像嵌入完成: id=%s, size=%s, 加载=%.2fs, 推理=%.2fs", embedding_id, img_size, t_load, t_infer)
+    logger.info("图像嵌入完成: id=%s, size=%s, 加载=%.2fs, 编码=%.2fs", embedding_id, img_size, t_load, t_infer)
     return {"embedding_id": embedding_id, "image_size": list(img_size)}
 
 
@@ -186,20 +198,90 @@ def get_embedding(embedding_id: str) -> dict:
     return _embeddings.get(embedding_id)
 
 
-def _empty_mask_response(image_path: str, reason: str = "") -> dict:
-    img = Image.open(image_path)
-    h, w = img.size[1], img.size[0]
-    empty = np.zeros((h, w), dtype=np.float32)
+def drop_embedding(embedding_id: str):
+    """释放某个嵌入 (含 GPU 特征缓存)。用于一次性使用的图像, 如跨切片传播。"""
+    _embeddings.pop(embedding_id, None)
+    _features.pop(embedding_id, None)
+
+
+def _store_features(embedding_id: str, feats):
+    _features[embedding_id] = feats
+    _features.move_to_end(embedding_id)
+    while len(_features) > _FEATURE_MAX:
+        _features.popitem(last=False)
+
+
+def _encode_image(image_path: str):
+    """运行图像编码器并返回特征 (调用方需持有 _infer_lock)。"""
+    pred = getattr(_model, "predictor", None)
+    if pred is None:
+        # predictor 在首次 predict 时才创建: 用一次带提示的预测初始化 (不依赖无提示的全图分割)
+        with Image.open(image_path) as im:
+            w, h = im.size
+        _model.predict(source=image_path, points=[[w / 2, h / 2]], labels=[1], verbose=False)
+        pred = _model.predictor
+    try:
+        # Ultralytics 的 set_image 不带 inference_mode: 编码器激活会挂在特征的 autograd 图上
+        # (实测单次约 35 GB 显存), 这里显式关闭梯度。
+        with torch.inference_mode():
+            pred.set_image(image_path)
+        return pred.features
+    finally:
+        pred.reset_image()  # 避免陈旧特征泄漏到其他图像的推理
+
+
+def _empty_mask_np(image_path: str, reason: str = "") -> dict:
+    with Image.open(image_path) as img:
+        w, h = img.size
     if reason:
         logger.warning("No SAM mask generated: %s", reason)
-    return {"mask": empty.tolist(), "mask_shape": [h, w], "scores": [0.0]}
+    return {"mask": np.zeros((h, w), dtype=np.float32), "scores": [0.0]}
+
+
+def _empty_mask_response(image_path: str, reason: str = "") -> dict:
+    out = _empty_mask_np(image_path, reason)
+    h, w = out["mask"].shape
+    return {"mask": out["mask"].tolist(), "mask_shape": [h, w], "scores": [0.0]}
 
 
 # ── 点提示分割 ────────────────────────────────────────────────
 
+def _run_prompted(embedding_id: str, image_path: str, points, labels):
+    """点提示推理, 复用缓存的编码器特征 (被淘汰则重新编码一次)。"""
+    with _infer_lock:
+        feats = _features.get(embedding_id)
+        if feats is None and getattr(_model, "predictor", None) is not None:
+            feats = _encode_image(image_path)
+            _store_features(embedding_id, feats)
+        pred = getattr(_model, "predictor", None)
+        if pred is not None:
+            pred.features = feats
+        try:
+            return _model.predict(
+                source=image_path,
+                points=[points],     # shape: [1, N, 2]
+                labels=[labels],     # shape: [1, N]
+                verbose=False,
+            )
+        finally:
+            if pred is not None:
+                pred.reset_image()
+
+
 def predict_mask(embedding_id: str, points: list[list[float]],
                  labels: list[int]) -> dict:
     """执行 SAM3 分割推理, 返回 {mask, mask_shape, scores}。首次调用时自动加载模型。"""
+    out = predict_mask_np(embedding_id, points, labels)
+    return {
+        "mask": out["mask"].tolist(),
+        "mask_shape": [out["mask"].shape[0], out["mask"].shape[1]],
+        "scores": out["scores"],
+    }
+
+
+def predict_mask_np(embedding_id: str, points: list[list[float]],
+                    labels: list[int]) -> dict:
+    """同 predict_mask, 但 mask 以 float32 ndarray 返回 (跨切片传播用, 省去 JSON/列表转换)。"""
     import time
 
     ensure_loaded()  # 懒加载：首次调用时才加载模型
@@ -210,27 +292,21 @@ def predict_mask(embedding_id: str, points: list[list[float]],
     info = _embeddings[embedding_id]
     image_path = info["path"]
 
-    # 使用 Ultralytics 高层 API: 传入 points + labels
     t0 = time.perf_counter()
-    results = _model.predict(
-        source=image_path,
-        points=[points],     # shape: [1, N, 2]
-        labels=[labels],      # shape: [1, N]
-        verbose=False,
-    )
+    results = _run_prompted(embedding_id, image_path, points, labels)
     t_infer = time.perf_counter() - t0
 
     if not results or results[0].masks is None:
-        return _empty_mask_response(image_path, "results empty or masks is None")
+        return _empty_mask_np(image_path, "results empty or masks is None")
 
     # 提取 mask 数据
     masks_data = results[0].masks.data  # shape: [N, H, W]
     if masks_data is None:
-        return _empty_mask_response(image_path, "masks.data is None")
+        return _empty_mask_np(image_path, "masks.data is None")
     if getattr(masks_data, "shape", None) is None or len(masks_data.shape) < 3:
-        return _empty_mask_response(image_path, f"unexpected mask shape: {getattr(masks_data, 'shape', None)}")
+        return _empty_mask_np(image_path, f"unexpected mask shape: {getattr(masks_data, 'shape', None)}")
     if int(masks_data.shape[0]) == 0:
-        return _empty_mask_response(image_path, "masks.data contains zero masks")
+        return _empty_mask_np(image_path, "masks.data contains zero masks")
 
     # 后处理: 提取 mask、降采样
     t1 = time.perf_counter()
@@ -275,8 +351,4 @@ def predict_mask(embedding_id: str, points: list[list[float]],
     logger.info("推理完成: points=%d, mask_shape=%s, score=%.3f, 推理=%.2fs, 后处理=%.2fs",
                 len(points), mask.shape, score, t_infer, t_post)
 
-    return {
-        "mask": mask.tolist(),
-        "mask_shape": [mask.shape[0], mask.shape[1]],
-        "scores": [score],
-    }
+    return {"mask": mask, "scores": [score]}
