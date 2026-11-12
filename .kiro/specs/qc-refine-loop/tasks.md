@@ -4,14 +4,14 @@
 
 ## Wave 0 — Test tooling
 
-- [ ] Add `requirements-dev.txt` (`pytest`, `hypothesis`) and document it in the README run section. Check: `pip install -r requirements-dev.txt` in the `.venv`, `pytest tests` still green
+- [x] Add `requirements-dev.txt` (`pytest`, `hypothesis`) and document it in the README run section. Check: `pip install -r requirements-dev.txt` in the `.venv`, `pytest tests` still green
 
 ## Wave 1 — QC service (S4; Requirements 1, 2) — due 11-19
 
-- [ ] `src/qc_service.py`: envelope, ring, `contrast_db`, `leak`, `miss`, composite `score`, leak / miss maps, declared constants returned with every result; empty / full / no-ring cases return score 0 with a reason
-- [ ] Fault continuity: per-row presence and centre shift, `continuity`, `fragments`, fault score
-- [ ] `tests/test_qc_service.py`: constructed slices — exact mask beats mask + background, mask − part of target, empty, full; fault score drops with a gap and with a fragment; time-slice fallback labelled `abs`
-- [ ] `tests/test_qc_service_pbt.py` (`hypothesis`): adding background pixels never raises the score; removing target pixels next to an exact mask never raises it; score in `[0, 1]`; same input → same output. Record any bug PBT finds that the unit tests missed (for the README PBT answer)
+- [x] (2026-11-12, design C) `src/qc_service.py`: envelope, ring, `contrast_db`, `leak`, `miss`, composite `score`, leak / miss maps, declared constants returned with every result; empty / full / no-ring cases return score 0 with a reason
+- [x] (2026-11-12) Fault continuity: per-row presence and centre shift, `continuity`, `fragments`, fault score
+- [x] (2026-11-12, 17 tests) `tests/test_qc_service.py`: constructed slices — exact mask beats mask + background, mask − part of target, empty, full; fault score drops with a gap and with a fragment; time-slice fallback labelled `abs`
+- [x] (2026-11-12, 6 properties incl. brighter reflector) `tests/test_qc_service_pbt.py` (`hypothesis`): adding background pixels never raises the score; removing target pixels next to an exact mask never raises it; score in `[0, 1]`; same input → same output. Record any bug PBT finds that the unit tests missed (for the README PBT answer)
 
 ### Findings 2026-11-12 — the declared QC design does not meet Requirement 1.3
 
@@ -22,6 +22,27 @@ Implemented exactly as declared (`RING_PX 4`, `BG_PERCENTILE 75`, `TARGET_PERCEN
 3. While diagnosing, two variants were tried on the demo data (`BG_PERCENTILE 50`; a low-frequency-fraction evidence map). Neither ranked the truth best consistently (1/12 and 5/10). These were exploratory looks at demo truth, so neither may be adopted on that basis.
 
 Status: `qc_service.py` and its tests are committed as a record; the failing property is marked `xfail(strict=True)` pointing here. Wave 1 is **not** done. A redesign needs the owner's decision (see the S4 row in `scope.md`).
+
+### Redesign C, 2026-11-12 (owner chose option C)
+
+Spec updated first (Requirement 1, design "Reference (option C)"). Then:
+
+1. **Constructed-scene tests drove two corrections, both recorded here.**
+   - Hard-edged sine blocks are not a valid "exact mask": a block's envelope extends past its edges, so cutting a block's edge column can legitimately improve the fit. Scenes were rebuilt like the generator (Ricker target, exact mask = −6 dB envelope extent). With Ricker scenes the remaining violations were: cuts of 1–2 traces (inside the 2-px guard band: 218 / 236 of 400; cuts ≥ 3 traces: 0) and "+ background band" scoring above the exact mask in 16 of 3,000 scenes by at most 0.0089.
+   - So Requirement 1.3 now states two resolution limits: errors narrower than `GUARD_PX` are not seen, and score differences below `SCORE_RESOLUTION = 0.01` carry no meaning (the loop's `MIN_GAIN` is the same value, so it never acts on them). No other constant changed: `SEED_HALF 2`, `TARGET_BAND_DB 6`, `GUARD_PX 2`, `RING_PX 4` are as first declared for C.
+2. **Result:** 17 unit tests and 6 property tests (200 examples each, including a brighter reflector 3–10 samples above the target) pass. Requirement 1 is met on constructed scenes.
+3. **One-shot check on the demo volumes (run once, not used to tune).** Simulated click = interior point of the truth slice; truth mask vs three mistakes (+20 rows up into the horizon, right half cut, +6 background traces). Truth ranked best in **4 of 12**:
+
+   | Volume | View | Inlines 16 / 20 / 24 truth ranked best |
+   |---|---|---|
+   | clean (30 dB) | raw | **3 / 3** (truth 0.84–0.89 vs best mistake 0.64–0.68) |
+   | clean (30 dB) | low-freq | 0 / 3 (+20 up scores higher) |
+   | noisy (6 dB) | raw | 1 / 3 |
+   | noisy (6 dB) | low-freq | 0 / 3 (+20 up scores higher) |
+
+   Why, from the envelope profile over the target traces (clean, inline 20): in the **raw** view the horizon above the target peaks at ≈ 0.36 against ≈ 0.10 inside the target, so C correctly calls it "not target". In the **low-frequency** view the filter removes the horizon's 32 Hz energy and it drops to ≈ 0.09, the same level as the target; an amplitude-based QC cannot tell them apart there. In the **noisy raw** view the target sits at the noise level (that is the point of H1), so there is nothing for an amplitude QC to anchor on.
+
+**Consequence for the loop and the demo (owner decision needed):** the QC is trustworthy where the target is visible by amplitude and its neighbours differ in amplitude — on the demo data, the clean volume's raw view. It is not trustworthy on the low-frequency view, which is exactly the view H1 recommends for the noisy volume. Choosing a different QC view or metric now would be a design change made after looking at demo truth, so it is not done here.
 
 ## Wave 2 — Loop driver (S5; Requirement 3) — due 11-20
 

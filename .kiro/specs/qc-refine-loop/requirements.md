@@ -20,14 +20,16 @@ Terms:
 
 **User Story:** As an interpreter, I want each segmentation scored without ground truth, so that the same check would work on real data where no truth exists.
 
+> Revised 2026-11-12 (owner chose option C after the first design failed this requirement; see `tasks.md` Findings). "Target-like" is now defined relative to the envelope where the interpreter clicked, and the ring starts after a guard band.
+
 #### Acceptance Criteria
 
-1. WHEN a binary mask and its slice are given THEN the QC service SHALL compute, from the slice envelope only: the **contrast** (median envelope inside the mask over median envelope in the ring, in dB), the **leak fraction** (share of mask pixels whose envelope looks like the ring), the **miss fraction** (share of ring pixels whose envelope looks like the mask), and a **composite score** in `[0, 1]`.
+1. WHEN a binary mask, its slice and the interpreter's positive clicks are given THEN the QC service SHALL take the envelope in a small window around the positive clicks as the **reference**, call a pixel **target-like** when its envelope is within `TARGET_BAND_DB` of the reference median, and compute: the **leak fraction** (share of mask pixels that are not target-like), the **miss fraction** (share of ring pixels, beyond a guard band, that are target-like), the **contrast** (median envelope inside the mask over the ring, in dB, reported only) and a **composite score** `(1 − leak)·(1 − miss)` in `[0, 1]`.
 2. THE QC service SHALL NOT read any ground-truth mask.
-3. WHEN pixels that look like background are added to a mask THEN the leak fraction SHALL not decrease and the composite score SHALL not increase; WHEN target-like pixels next to the mask are left out THEN the miss fraction SHALL not decrease and the composite score SHALL not increase (checked with constructed masks and property-based tests).
-4. THE QC service SHALL declare every threshold as a module-level constant with a one-line reason, and SHALL return the constants used with every result.
-5. IF the mask is empty, covers the whole slice, or leaves no ring pixels THEN the QC service SHALL return a composite score of 0 and a reason, not raise.
-6. THE composite score and its parts SHALL be deterministic for a given slice and mask.
+3. WHEN pixels that look like background are added to a mask THEN the composite score SHALL not increase by `SCORE_RESOLUTION` or more; WHEN target pixels are left out of a mask, in a band wider than the guard band, THEN the composite score SHALL not increase by `SCORE_RESOLUTION` or more; WHEN a mask is grown into a nearby reflector much brighter than the clicked target THEN the composite score SHALL decrease. These SHALL be checked with property-based tests on constructed scenes, including scenes with a brighter reflector next to the target. `SCORE_RESOLUTION` (0.01) is the score's stated resolution: score differences below it carry no meaning, and the loop never acts on them (Requirement 3.4, 3.5).
+4. THE QC service SHALL declare every threshold as a module-level constant with a one-line reason, and SHALL return the constants used with every result. Constants SHALL be chosen from their definitions and the constructed-scene tests only, never by looking at the demo volumes' ground truth.
+5. IF the mask is empty, covers the whole slice, leaves no ring pixels, or no positive click lies inside the slice THEN the QC service SHALL return a composite score of 0 and a reason, not raise.
+6. THE composite score and its parts SHALL be deterministic for a given slice, mask and clicks.
 
 ### Requirement 2 — Fault continuity QC
 
@@ -48,8 +50,8 @@ Terms:
 1. WHEN a round ends THEN the driver SHALL find the largest connected region of **leaked** pixels (in the mask, background-like) and of **missed** pixels (in the ring, target-like), and SHALL add one corrective point at the interior point (distance-transform peak) of the larger region: negative for a leak, positive for a miss.
 2. THE first round SHALL use only the interpreter's prompts; each later round SHALL use all earlier prompts plus one corrective point.
 3. THE loop SHALL run at most `MAX_ROUNDS = 3` rounds.
-4. THE loop SHALL stop early WHEN the composite score improves by less than `MIN_GAIN` over the best round so far, OR WHEN the largest leak / miss region is smaller than `MIN_REGION_PX`, OR WHEN SAM returns an empty mask; the stop reason SHALL be recorded.
-5. THE loop SHALL return the **best** round by composite score (ties: the earliest), not the last round.
+4. THE loop SHALL stop early WHEN the composite score improves by less than `MIN_GAIN` (= `SCORE_RESOLUTION`) over the best round so far, OR WHEN the largest leak / miss region is smaller than `MIN_REGION_PX`, OR WHEN SAM returns an empty mask; the stop reason SHALL be recorded.
+5. THE loop SHALL return the **best** round, not the last round: a later round replaces the best round only if its composite score is higher by at least `MIN_GAIN`.
 6. THE loop SHALL embed the slice once and reuse the embedding for every round.
 7. THE driver SHALL NOT use ground truth to choose prompts, rounds or the best round.
 

@@ -3,8 +3,9 @@ Label-free quality control of one 2-D segmentation mask on one seismic slice (sc
 spec .kiro/specs/qc-refine-loop/).
 
 Every metric is computed from the slice itself (its envelope); no ground truth is read here.
-All thresholds are declared constants below, chosen from their definitions before any run and
-not tuned on the demo volume. They are returned with every result.
+"Target-like" is defined relative to the envelope where the interpreter clicked (option C, owner
+decision 2026-11-12, after the first percentile-based design failed Requirement 1.3). All thresholds
+are declared constants below, checked only on constructed scenes, and returned with every result.
 
 Orientation: inline / crossline slices are (samples, traces), time is axis 0. Time slices have no
 time axis, so the envelope falls back to |amplitude| and the result says so.
@@ -17,19 +18,24 @@ from scipy import ndimage
 from scipy.signal import hilbert
 
 # ── Declared constants (reason in the comment; see design.md) ────────────────
-RING_PX = 4                 # 8 ms vertically / 4 traces laterally: local background, small next to the 41-sample target window
-BG_PERCENTILE = 75          # a mask pixel weaker than 3/4 of the ring looks like background ("leak")
-TARGET_PERCENTILE = 25      # a ring pixel stronger than the weakest 1/4 of the mask looks like target ("miss")
-CONTRAST_REF_DB = 6.0       # contrast at which the contrast term saturates: envelope amplitude doubled
+# Option C (owner decision 2026-11-12): "target-like" is defined relative to the envelope where the
+# interpreter clicked. Chosen from these definitions and checked only on constructed scenes
+# (tests/test_qc_service_pbt.py), not on the demo volumes.
+SEED_HALF = 2               # 5 x 5 native pixels around a click: stable median, stays inside a target several traces wide
+TARGET_BAND_DB = 6.0        # within a factor of 2 in envelope amplitude of the clicked area = the same kind of reflector
+GUARD_PX = 2                # skip the envelope halo right next to the mask edge
+RING_PX = 4                 # 4 native pixels (8 ms vertically, 4 traces laterally) of local background beyond the guard
+SCORE_RESOLUTION = 0.01     # score differences below this carry no meaning (largest property-test excess: 0.0089); = loop MIN_GAIN
 CONTINUITY_TOL_COLS = 1     # a fault may step one trace per sample row
 
 TARGET_TYPES = ("deep_target", "fault")
 DIRECTIONS_WITH_TIME_AXIS = ("inline", "crossline")
+_CHESS = np.ones((3, 3), bool)
 
 
 def constants() -> dict:
-    return {"RING_PX": RING_PX, "BG_PERCENTILE": BG_PERCENTILE, "TARGET_PERCENTILE": TARGET_PERCENTILE,
-            "CONTRAST_REF_DB": CONTRAST_REF_DB, "CONTINUITY_TOL_COLS": CONTINUITY_TOL_COLS}
+    return {"SEED_HALF": SEED_HALF, "TARGET_BAND_DB": TARGET_BAND_DB, "GUARD_PX": GUARD_PX,
+            "RING_PX": RING_PX, "SCORE_RESOLUTION": SCORE_RESOLUTION, "CONTINUITY_TOL_COLS": CONTINUITY_TOL_COLS}
 
 
 def envelope(slice2d: np.ndarray, direction: str = "inline") -> tuple[np.ndarray, str]:
@@ -40,26 +46,50 @@ def envelope(slice2d: np.ndarray, direction: str = "inline") -> tuple[np.ndarray
     return np.abs(a), "abs"
 
 
-def ring_of(mask: np.ndarray, width: int = RING_PX) -> np.ndarray:
-    """Pixels within `width` (chessboard distance) of the mask but outside it."""
+def _dilate(mask: np.ndarray, n: int) -> np.ndarray:
+    return ndimage.binary_dilation(mask, structure=_CHESS, iterations=n) if n > 0 else mask.copy()
+
+
+def ring_of(mask: np.ndarray, guard: int = GUARD_PX, width: int = RING_PX) -> np.ndarray:
+    """Pixels between `guard` and `guard + width` (chessboard distance) outside the mask."""
     if not mask.any():
         return np.zeros_like(mask)
-    grown = ndimage.binary_dilation(mask, structure=np.ones((3, 3), bool), iterations=width)
-    return grown & ~mask
+    return _dilate(mask, guard + width) & ~_dilate(mask, guard)
+
+
+def reference_envelope(env: np.ndarray, seeds) -> float | None:
+    """Median envelope in (2*SEED_HALF+1)^2 windows around the positive clicks inside the slice, or None."""
+    rows, cols = env.shape
+    window = np.zeros(env.shape, bool)
+    for r, c in seeds or ():
+        r, c = int(round(r)), int(round(c))
+        if 0 <= r < rows and 0 <= c < cols:
+            window[max(0, r - SEED_HALF):r + SEED_HALF + 1, max(0, c - SEED_HALF):c + SEED_HALF + 1] = True
+    if not window.any():
+        return None
+    ref = float(np.median(env[window]))
+    return ref if ref > 0 else None
+
+
+def target_like(env: np.ndarray, ref: float) -> np.ndarray:
+    """Pixels whose envelope is within TARGET_BAND_DB of the reference."""
+    lo, hi = ref * 10.0 ** (-TARGET_BAND_DB / 20.0), ref * 10.0 ** (TARGET_BAND_DB / 20.0)
+    return (env >= lo) & (env <= hi)
 
 
 def _empty_result(reason: str, kind: str, target_type: str, shape) -> dict:
     z = np.zeros(shape, dtype=bool)
     return {"score": 0.0, "reason": reason, "target_type": target_type, "envelope": kind,
-            "contrast_db": None, "leak": None, "miss": None, "mask_pixels": 0, "ring_pixels": 0,
-            "leak_map": z, "miss_map": z, "constants": constants()}
+            "contrast_db": None, "leak": None, "miss": None, "reference_envelope": None,
+            "mask_pixels": 0, "ring_pixels": 0, "leak_map": z, "miss_map": z, "constants": constants()}
 
 
-def score_mask(slice2d: np.ndarray, mask: np.ndarray, target_type: str = "deep_target",
+def score_mask(slice2d: np.ndarray, mask: np.ndarray, seeds, target_type: str = "deep_target",
                direction: str = "inline") -> dict:
     """
-    QC of `mask` on `slice2d` (same shape). Returns scalar metrics, the composite `score` in [0, 1],
-    and boolean `leak_map` / `miss_map` for the refinement driver. Deterministic.
+    QC of `mask` on `slice2d` (same shape), relative to the interpreter's positive clicks `seeds`
+    (iterable of native-grid (row, col)). Returns scalar metrics, the composite `score` in [0, 1],
+    and boolean `leak_map` / `miss_map` for the refinement driver. Deterministic; reads no truth.
     """
     if target_type not in TARGET_TYPES:
         raise ValueError(f"Unknown target_type: {target_type!r} (expected one of {TARGET_TYPES})")
@@ -76,24 +106,20 @@ def score_mask(slice2d: np.ndarray, mask: np.ndarray, target_type: str = "deep_t
     ring = ring_of(m)
     if not ring.any():
         return _empty_result("mask leaves no ring (covers the slice)", kind, target_type, m.shape)
+    ref = reference_envelope(env, seeds)
+    if ref is None:
+        return _empty_result("no positive click inside the slice", kind, target_type, m.shape)
 
-    env_in, env_ring = env[m], env[ring]
-    m_in, m_ring = float(np.median(env_in)), float(np.median(env_ring))
-    p_ring = float(np.percentile(env_ring, BG_PERCENTILE))
-    p_in = float(np.percentile(env_in, TARGET_PERCENTILE))
-    leak_map = m & (env <= p_ring)
-    miss_map = ring & (env >= p_in)
+    like = target_like(env, ref)
+    leak_map = m & ~like
+    miss_map = ring & like
     leak = float(leak_map.sum() / m.sum())
     miss = float(miss_map.sum() / ring.sum())
-    if m_ring > 0 and m_in > 0:
-        contrast_db = float(20.0 * np.log10(m_in / m_ring))
-        contrast_term = float(np.clip(contrast_db / CONTRAST_REF_DB, 0.0, 1.0))
-    else:   # silent ring (all-zero background) or silent mask: ratio undefined, keep JSON finite
-        contrast_db = None
-        contrast_term = 1.0 if m_in > m_ring else 0.0
+    m_in, m_ring = float(np.median(env[m])), float(np.median(env[ring]))
+    contrast_db = float(20.0 * np.log10(m_in / m_ring)) if m_in > 0 and m_ring > 0 else None
 
     out = {"target_type": target_type, "envelope": kind, "reason": None,
-           "contrast_db": contrast_db, "leak": leak, "miss": miss,
+           "contrast_db": contrast_db, "leak": leak, "miss": miss, "reference_envelope": ref,
            "mask_pixels": int(m.sum()), "ring_pixels": int(ring.sum()),
            "median_env_mask": m_in, "median_env_ring": m_ring,
            "leak_map": leak_map, "miss_map": miss_map, "constants": constants()}
@@ -103,7 +129,7 @@ def score_mask(slice2d: np.ndarray, mask: np.ndarray, target_type: str = "deep_t
         out.update(f)
         out["score"] = float(f["continuity"] / max(1, f["fragments"]))
     else:
-        out["score"] = contrast_term * (1.0 - leak) * (1.0 - miss)
+        out["score"] = (1.0 - leak) * (1.0 - miss)
     return out
 
 

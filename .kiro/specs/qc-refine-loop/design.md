@@ -48,30 +48,37 @@ Input: `slice2d` (float32, native grid, `rows = samples` for inline / crossline)
 
 **Envelope.** `env = |hilbert(slice2d, axis=0)|` for inline / crossline (time is axis 0). For time slices there is no time axis in the slice; QC uses `|slice2d|` and says so in the result (`envelope: "abs"`). Computed on the view the user segmented (`raw` or `lowfreq`), so QC judges what SAM saw.
 
-**Ring.** `ring = binary_dilation(mask, disk(RING_PX)) & ~mask`, clipped to the slice.
+**Ring.** `ring = dilate(mask, GUARD_PX + RING_PX) & ~dilate(mask, GUARD_PX)` (chessboard dilation), clipped to the slice. The guard band keeps the envelope's own halo just outside the target out of the ring.
 
-**Deep-target metrics.** With `m_in = median(env[mask])`, `m_ring = median(env[ring])`, `p_ring = percentile(env[ring], BG_PERCENTILE)`, `p_in = percentile(env[mask], TARGET_PERCENTILE)`:
+**Reference (option C, revised 2026-11-12).** The interpreter's positive clicks, in native-grid `(row, col)`, define what the target looks like: `ref = median(env[window])`, where `window` is the union of `(2·SEED_HALF+1)²` squares around the positive clicks. A pixel is **target-like** when `|20·log10(env / ref)| ≤ TARGET_BAND_DB`. A reflector much brighter than the clicked target, or quiet background much weaker, is not target-like. If no positive click lies inside the slice, the result is score 0 with a reason.
+
+**Deep-target metrics.**
 
 | Metric | Definition | Better |
 |---|---|---|
-| `contrast_db` | `20·log10(m_in / m_ring)` | higher |
-| `leak` | share of mask pixels with `env ≤ p_ring` (look like background) | lower |
-| `miss` | share of ring pixels with `env ≥ p_in` (look like target) | lower |
-| `score` | `clip(contrast_db / CONTRAST_REF_DB, 0, 1) · (1 − leak) · (1 − miss)` | higher |
+| `leak` | share of mask pixels that are not target-like | lower |
+| `miss` | share of ring pixels that are target-like | lower |
+| `contrast_db` | `20·log10(median env in mask / median env in ring)`, reported only | — |
+| `score` | `(1 − leak) · (1 − miss)` | higher |
 
 Leak and miss pixels are kept as boolean maps so the driver can find their largest regions.
 
+*Superseded first design (kept for the record):* `leak` / `miss` were defined against the ring's 75th and the mask's 25th envelope percentiles, and the score had a contrast term. It failed Requirement 1.3 — see `tasks.md` Findings.
+
 **Fault metrics** (`target_type = "fault"`). For each row in the mask's vertical extent: present if any mask pixel; centre = mean column. `continuity` = share of consecutive row pairs that are both present with `|Δcentre| ≤ CONTINUITY_TOL_COLS`; `fragments` = number of 8-connected components. `score = continuity / fragments`. Leak / miss maps are computed as for deep targets, so the same corrective-point rule applies.
 
-**Declared constants** (module top, each with its reason; returned in every result):
+**Declared constants** (module top, each with its reason; returned in every result). Chosen from these definitions and checked only on constructed scenes (`tests/test_qc_service_pbt.py`), not on the demo volumes:
 
 | Constant | Value | Reason |
 |---|---|---|
-| `RING_PX` | 4 | 4 native pixels = 8 ms vertically and 4 traces laterally: local background around the mask, small next to the deep target's 41-sample window and the 48-trace slice width |
-| `BG_PERCENTILE` | 75 | A mask pixel weaker than three quarters of the ring looks like background |
-| `TARGET_PERCENTILE` | 25 | A ring pixel stronger than the weakest quarter of the mask looks like target |
-| `CONTRAST_REF_DB` | 6.0 | Contrast at which the contrast term saturates; a doubling of envelope amplitude |
+| `SEED_HALF` | 2 | 5 × 5 native pixels around a click: enough samples for a stable median, small enough to stay inside a target several traces wide |
+| `TARGET_BAND_DB` | 6.0 | Within a factor of 2 in envelope amplitude of the clicked area counts as the same kind of reflector |
+| `GUARD_PX` | 2 | Skips the envelope halo next to the mask edge |
+| `RING_PX` | 4 | 4 native pixels (8 ms vertically, 4 traces laterally) of local background beyond the guard |
+| `SCORE_RESOLUTION` | 0.01 | Score differences below this carry no meaning: on 3,000 constructed scenes the largest amount by which a "mask + background band" outscored the exact mask was 0.0089. Equal to the loop's `MIN_GAIN` |
 | `CONTINUITY_TOL_COLS` | 1 | A fault may step one trace per sample row |
+
+Resolution limit: an error narrower than `GUARD_PX` lies inside the guard band and is not seen. The property tests state this explicitly (left-out bands wider than the guard).
 
 These values are chosen from the definitions above before any run and are not tuned on the demo volume. If a value turns out to be unworkable, the change, the reason and the before / after output go into `tasks.md`; the old numbers are not quietly replaced.
 
@@ -83,21 +90,23 @@ run(slice2d, view_image, prompts, target_type, segment_fn, truth=None)
   rounds = []
   for r in 1..MAX_ROUNDS:
       mask = segment_fn(prompts)                  # SAM predict → native-grid bool
+      # QC reference = the interpreter's positive clicks only; corrective points never move it
       if mask empty: record round, stop "empty_mask"
       q = qc.score(slice2d, mask, target_type)
       record round r: prompts, q, Δ vs previous, truth overlap (if truth), mask
-      if r > 1 and q.score < best.score + MIN_GAIN: stop "no_gain"
+      if r > 1 and q.score < best.score + MIN_GAIN: stop "no_gain"     # best stays the earlier round
+      best = round r                                                    # only reached with a gain >= MIN_GAIN
       if r == MAX_ROUNDS: stop "max_rounds"
       region, sign = larger of largest(q.leak_map), largest(q.miss_map)
       if region.size < MIN_REGION_PX: stop "nothing_to_fix"
       prompts += (interior_point(region), 1 if sign == miss else 0)
-  best = argmax score, earliest on ties
+  best = the round kept by the rule above (a later round must beat it by >= MIN_GAIN)
 ```
 
 | Constant | Value | Reason |
 |---|---|---|
 | `MAX_ROUNDS` | 3 | Product decision (MVP Requirement 4.2); one embed, so cost is ~3 decoder passes |
-| `MIN_GAIN` | 0.01 | Smaller score changes are below the resolution of the metric on a 256 × 48 slice |
+| `MIN_GAIN` | 0.01 (= `qc_service.SCORE_RESOLUTION`) | Smaller score changes are below the score's stated resolution |
 | `MIN_REGION_PX` | 12 | Smaller regions are a few pixels of envelope noise, not a correctable error |
 
 `interior_point` reuses the distance-transform-peak rule of `propagation_service.mask_to_points`, so a corrective point never lands on a region's edge.
