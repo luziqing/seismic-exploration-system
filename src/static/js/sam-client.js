@@ -43,7 +43,19 @@ async function runSAMInference() {
     }
 
     isInferring = true;
-    setStatus('loading', '⏳ SAM 推理中...');
+    setStatus('loading', 'Running SAM...');
+
+    // Auto-refine: the server runs SAM + label-free QC for up to 3 rounds (refine-panel.js)
+    if (typeof autoRefineOn === 'function' && autoRefineOn()) {
+        try {
+            if (!picks.some(p => p.label === 1)) throw new Error('add at least one Include point on the target');
+            await runRefine(picks);
+        } catch (e) {
+            setStatus('error', 'SAM refine failed: ' + e.message);
+        } finally { isInferring = false; }
+        return;
+    }
+    if (typeof clearRefine === 'function') clearRefine();
 
     try {
         // 1. Embed the current slice once. NPY volumes: the server renders the slice itself, so the
@@ -55,7 +67,7 @@ async function runSAMInference() {
             if (volInfo.source === 'api/npy' && volInfo.name) {
                 resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/embed`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({direction: curDir, index: curIndex, mode: sliceMode})
+                    body: JSON.stringify({direction: curDir, index: curIndex, mode: 'raw'})  // SAM segments raw (docs/MEASUREMENTS.md)
                 });
             } else {
                 const tempC = document.createElement('canvas');

@@ -97,3 +97,17 @@
 #leftAxis { flex:0 0 70px; }
 /* Let the workspace shrink below the canvas's current pixel width, so resizing and compare mode measure the real space */
 .workspace { min-width:0; overflow:hidden; }
+/* QC refine panel (refine-panel.js, scope S6) — top-left, so it never covers the deep target */
+#refinePanel { position:absolute; left:8px; top:30px; z-index:90; background:rgba(255,255,255,0.95); border:1px solid #888; box-shadow:0 2px 8px rgba(0,0,0,.2); font-size:11px; padding:4px 6px 5px; max-width:460px; }
+#refinePanel .refine-panel-head { display:flex; justify-content:space-between; align-items:center; font-weight:bold; margin-bottom:3px; gap:8px; }
+#refinePanel .refine-panel-head button { border:1px solid #888; background:#eee; font-size:11px; line-height:12px; padding:0 5px; cursor:pointer; margin-left:2px; }
+#refinePanel .refine-table { border-collapse:collapse; width:100%; }
+#refinePanel .refine-table th, #refinePanel .refine-table td { border-bottom:1px solid #ddd; padding:2px 6px; text-align:right; white-space:nowrap; }
+#refinePanel .refine-table th { background:#f2f2f2; font-weight:bold; vertical-align:bottom; }
+#refinePanel .refine-table td:nth-child(4) { text-align:left; }
+#refinePanel .refine-table tr[data-round] { cursor:pointer; }
+#refinePanel .refine-table tr.sel td { background:#dbeafe; }
+#refinePanel .refine-table tr.best td:nth-child(5) { color:#b8860b; font-size:13px; }
+#refinePanel .refine-table td.ref, #refinePanel .refine-table th:last-child { color:#666; }
+#refinePanel .refine-stop { margin-top:4px; font-weight:bold; max-width:440px; white-space:normal; }
+#refinePanel .refine-hint { margin-top:2px; color:#666; max-width:440px; }

@@ -246,6 +246,7 @@ function drawSeismic() {
             ctx.strokeRect(px - 3, py - 3, 6, 6);
         });
     });
+    if (typeof drawRefineOverlay === 'function') drawRefineOverlay(ctx, w, h);  // loop's corrective points
 
     ctx.restore();
     _fpsTick();

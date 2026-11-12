@@ -332,6 +332,7 @@ async function loadAndRenderSlice(dir, index) {
         updateSubtitle(dir, index);
         updateLineControls(index);
         if (typeof updateSurveyMap === 'function') updateSurveyMap();
+        if (typeof updateAutoRefineControl === 'function') updateAutoRefineControl();
         if (typeof syncCompareControls === 'function') syncCompareControls();
         if (typeof updateCompareView === 'function') updateCompareView();
         // 创建新拾取会话

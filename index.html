@@ -110,6 +110,7 @@
         <button class="action-btn" id="btnDelPoints">Undo</button>
         <button class="action-btn" id="btnClearMask">Clear</button>
         <button class="action-btn" id="btnRunSAM" style="font-weight:bold;color:#0055cc;" title="运行 SAM3 分割推理 (拾取点后点击)">▶ SAM</button>
+        <label id="autoRefineLabel" style="font-size:11px"><input type="checkbox" id="autoRefine" checked> Auto-refine</label>
         <button class="action-btn" id="btnPropagate" style="color:#007755;" title="以当前切片的 SAM mask 为种子, 向相邻切片自动传播 (需先运行 SAM)">🔁 传播</button>
         <span style="position:relative;display:inline-block;">
             <button class="action-btn" id="btnPropSettings" title="传播范围设置">⚙</button>
@@ -168,6 +169,13 @@
                 <div id="mainPanelTag" class="panel-tag"></div>
                 <div id="comparePanelTag" class="panel-tag panel-tag-right" style="display:none;"></div>
                 <div id="infoBox"></div>
+                <div id="refinePanel" style="display:none;">
+                    <div class="refine-panel-head">
+                        <span id="refinePanelTitle">QC refine</span>
+                        <span><button id="refinePanelToggle" title="Collapse">–</button><button id="refinePanelClose" title="Close">×</button></span>
+                    </div>
+                    <div id="refinePanelBody"></div>
+                </div>
                 <div id="surveyMap" style="display:none;">
                     <div class="survey-map-head">
                         <span>Survey map</span>
@@ -339,6 +347,7 @@
     <script src="/static/js/sgy-client.js"></script>
     <script src="/static/js/sam-client.js"></script>
     <script src="/static/js/survey-map.js"></script>
+    <script src="/static/js/refine-panel.js"></script>
     <script src="/static/js/compare.js"></script>
     <script src="/static/js/llm-client.js"></script>
 </body>
