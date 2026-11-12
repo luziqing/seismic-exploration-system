@@ -61,9 +61,9 @@ Spec first (Requirement 1.7, 1.8, 3.8; design "Envelope", "Reliability gate"). `
 
 ## Wave 2 — Loop driver (S5; Requirement 3) — due 11-20
 
-- [ ] `src/refine_service.py`: `run(...)` with injectable `segment_fn`; correction at the interior point of the larger of the largest leak / miss regions; stops `max_rounds`, `no_gain`, `nothing_to_fix`, `empty_mask`; best round = highest score, earliest on ties; embed once
-- [ ] Truth overlap per round through `validation_service`, stored as `truth_reference`, never read by the driver
-- [ ] `tests/test_refine_service.py` with stub segmenters: correction sign, round limit, each stop reason, best round kept when a later round is worse, one embed, driver does not touch truth (stub raises if read)
+- [x] (2026-11-12) `src/refine_service.py`: `run(...)` with injectable `segment_fn`; correction at the interior point of the larger of the largest leak / miss regions; stops `max_rounds`, `no_gain`, `nothing_to_fix`, `empty_mask`; best round = highest score, earliest on ties; embed once
+- [x] (2026-11-12; separate `attach_truth()` after the loop, `run()` has no truth parameter) Truth overlap per round through `validation_service`, stored as `truth_reference`, never read by the driver
+- [x] (2026-11-12, 15 tests, incl. `qc_unreliable` stop and QC reference fixed to the user's click) `tests/test_refine_service.py` with stub segmenters: correction sign, round limit, each stop reason, best round kept when a later round is worse, one embed, driver does not touch truth (stub raises if read)
 
 ## Wave 3 — API and persistence (S5; Requirement 4) — due 11-21
 
