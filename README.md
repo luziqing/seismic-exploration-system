@@ -144,7 +144,7 @@ Other controls (SEG-Y / VDS loading, playback, gain, AI assistant) are under **M
 | Label-free QC: reference = envelope around the user's click; leak, miss and a reliability gate | `src/qc_service.py` |
 | Refine loop: up to 3 rounds, one corrective point per round, best round kept, rounds logged in SQLite | `src/refine_service.py`, `POST /api/npy/{vol}/refine`, `GET /api/refine/{run_id}` |
 | Volume mask and cross-slice propagation | `src/volume_mask_service.py`, `src/propagation_service.py` |
-| UI: compare view, survey map, QC panel | `src/static/js/compare.js`, `survey-map.js`, `refine-panel.js` |
+| UI: compare view, survey map, QC panel | `src/static/js/compare.js`, `src/static/js/survey-map.js`, `src/static/js/refine-panel.js` |
 
 Design decisions and their reasons, including the ones that failed, are in `.kiro/specs/qc-refine-loop/` (requirements → design → tasks with dated findings).
 
@@ -152,7 +152,7 @@ Design decisions and their reasons, including the ones that failed, are in `.kir
 
 The software is built the way an experiment is run: the question and the test are written down before the answer is known, and the result decides what ships. The repository keeps the whole record, failures included.
 
-1. **Question before code.** Each feature starts as a spec in `.kiro/specs/` with acceptance criteria written before any result is seen: requirements, then design, then tasks. The QC loop's spec was written first; when the first QC design failed its own criterion on the demo data (the ground truth ranked best in 0 of 12 checks, and a property-based test found that adding background could raise the score), the design was changed in the spec first and then in the code. The failure and the redesign stay in `qc-refine-loop/tasks.md`.
+1. **Question before code.** Each feature starts as a spec in `.kiro/specs/` with acceptance criteria written before any result is seen: requirements, then design, then tasks. The QC loop's spec was written first; when the first QC design failed its own criterion on the demo data (the ground truth ranked best in 0 of 12 checks, and a property-based test found that adding background could raise the score), the design was changed in the spec first and then in the code. The failure and the redesign stay in `.kiro/specs/qc-refine-loop/tasks.md`.
 2. **Measurement as the arbiter.** A result comes from a script with its protocol declared at the top before the first run: fixed data, a fixed click rule, a fixed metric, run once, reruns byte-identical. Its output, not preference, set the product defaults: SAM3 segments the raw slice because the low-frequency view measured worse for it, although the low-frequency view helps a human see the target. Every public number points to `docs/MEASUREMENTS.md`, together with what it does *not* show.
 3. **An explicit boundary.** `.kiro/steering/scope.md` lists what is built, the check that proves each item done, and rules for converging: no redesign after a fixed date, one measurement run, the story follows the numbers. Anything outside it waits.
 4. **Rules that execute.** Constraints are code, not prose: steering files give every agent session the same rules; hooks run the matching tests when a module is saved, block commits of data or weights, and check public text for unsourced claims; `scripts/verify.py` proves the build in one command; a read-only reviewer agent audits the README and other public text against the measurements.
