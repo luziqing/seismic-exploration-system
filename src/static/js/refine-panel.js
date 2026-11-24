@@ -32,12 +32,13 @@ function updateAutoRefineControl() {
 }
 
 async function runRefine(picks) {
+    const volume = volInfo.name;
     const body = {
         direction: curDir, index: curIndex, mode: REFINE_SAM_MODE, target_type: 'deep_target',
         points: picks.map(p => [p.nx, p.ny]), labels: picks.map(p => p.label), write_mask: true,
     };
     setStatus('loading', (samState.device === 'cpu' ? 'Encoding slice on CPU (about 15 s), then ' : '') + 'running SAM with QC refine (up to 3 rounds)...');
-    const resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/refine`, {
+    const resp = await fetch(`/api/npy/${encodeURIComponent(volume)}/refine`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
     });
     if (!resp.ok) throw await respError(resp);
@@ -46,7 +47,7 @@ async function runRefine(picks) {
     refineSliceKey = currentSliceKey();
     selectRefineRound(refineRun.best_round);
     renderRefinePanel();
-    if (typeof refreshSurveyFootprint === 'function') refreshSurveyFootprint();
+    refreshVolumeMaskAvailability(volume);
     const best = refineRun.rounds[refineRun.best_round - 1];
     setStatus('ready', `QC refine: ${refineRun.rounds.length} round(s), best round ${refineRun.best_round}, ` +
                        `QC score ${best.score.toFixed(3)}. ${refineRun.stop_message}`);

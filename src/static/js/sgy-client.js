@@ -216,6 +216,7 @@ function applyVolumeInfo(info, fallbackName, source = 'api/npy') {
         || fallbackName
         || null;
 
+    if (source === 'api/npy') volumeMaskAvailability.delete(inferredName);
     volInfo = {
         source: source,
         name: inferredName,
@@ -599,6 +600,7 @@ btnClearMask.onclick = e => {
         fetch(`/api/db/session/${currentSessionId}/points`, {method: 'DELETE'});
     }
     logitsMap = null;
+    if (volInfo.source === 'api/npy' && volInfo.name) refreshVolumeMaskAvailability(volInfo.name);
     drawSeismic();
     updateSubtitle(curDir, curIndex);
 };
