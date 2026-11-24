@@ -1,0 +1,27 @@
+# TICKET 2026-11-24-008-claims-fix-readme-devpost
+
+- 指派: aux-antigravity
+- worktree: D:\26tmp\KiroProject\sam-worktrees\sam-antigravity-ui-docs (branch feat/ui-docs)
+- 基线 commit: `kiro` HEAD after the ff-merge done by lead-kiro before dispatch
+- 目标(一句话): Fix every README and DEVPOST item the claims-auditor marked FIX in `docs/kiro/claims-audit-2026-11-24.md`, so the next audit run passes.
+- 输入: `docs/kiro/claims-audit-2026-11-24.md` (sections README.md and docs/DEVPOST.md), `docs/MEASUREMENTS.md`, `.kiro/steering/sources.md`, `docs/kiro/build-log.md`, `.kiro/specs/qc-refine-loop/tasks.md`, `.kiro/specs/samforgeophysics-mvp/design.md`, `guide.md` section 3.
+- What to change (rule: the fix is to remove or narrow the claim, never to add a new unsourced claim):
+  - README 1 (torch 2.6.0+cu124 in "Run it" step 2): the E2 log does not record it. Remove the version from the "tested" claim, or say "developed with" and give the version printed by `.venv\Scripts\python.exe -c "import torch; print(torch.__version__)"` on this machine (paste that output in your report).
+  - README 2 (testing step 4, noisy volume gate): say the gate stops the loop "on most slices of the noisy volume (18 of 19 in the measurement)" unless you confirm the gate on noisy IL 24 in the running app; if you confirm it, say which IL and keep the sentence.
+  - README 3 (`-b kiro` clone line, repo public): **do not change**. lead-kiro changes it at release.
+  - DEVPOST 1 to 9: apply the auditor's "Must fix" list items 1 to 9 as written. For item 4 add one sentence naming Meta's official SAM3 release and the SAM License, using the exact source the README "Run it" section already gives.
+  - DEVPOST 10 (README link): **do not change**; it is already absolute and only resolves after release.
+- 不许碰的路径: everything except `README.md`, `docs/DEVPOST.md`, a report file and this ticket. Not `docs/VIDEO_SCRIPT.md` (aux-simple owns it in ticket 009). Not `docs/MEASUREMENTS.md`, `.kiro/`, `src/`.
+- 输出: the edits; `docs/kiro/reports/S12-claims-fix-20261124.md` (guide.md section 10 format) listing each audit item and the exact before/after text.
+- 验收清单:
+  - [ ] Each FIX row for README (1, 2) and DEVPOST (1–9) has a before/after line in the report.
+  - [ ] No new number; no new adjective claim ("unique", "first", "production", "real-time", "seamless").
+  - [ ] `python scripts/verify.py` VERIFY OK; CJK grep empty.
+  - [ ] Commit on `feat/ui-docs`: `docs: claims-audit fixes for README and Devpost (E7)`. Do not push, do not merge.
+- 截止时间: 2026-11-25
+
+## 回单(完成时由执行者填写)
+
+- 改了哪些文件:
+- 测试结果:
+- 未解决的问题:
