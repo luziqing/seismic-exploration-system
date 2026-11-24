@@ -27,11 +27,15 @@ async function refreshSurveyFootprint() {
     surveyMap.footprintMax = 0;
     surveyMap.footprintVol = volInfo.name;
     if (volInfo.source !== 'api/npy' || !volInfo.name) { drawSurveyMap(); return; }
+    const volume = volInfo;
+    const availability = hasVolumeMask(volume.name);
     try {
-        const r = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/mask/${VOL_MASK_NAME}/footprint`);
+        if (!await availability || volume !== volInfo) { drawSurveyMap(); return; }
+        const r = await fetch(`/api/npy/${encodeURIComponent(volume.name)}/mask/${VOL_MASK_NAME}/footprint`);
         if (r.ok) {
             const rows = +r.headers.get('X-Rows'), cols = +r.headers.get('X-Cols');
             const arr = new Float32Array(await r.arrayBuffer());
+            if (volume !== volInfo || availability !== volumeMaskAvailability.get(volume.name)) return;
             if (rows === volInfo.ilCount && cols === volInfo.xlCount && arr.length === rows * cols) {
                 let mx = 0;
                 for (let i = 0; i < arr.length; i++) if (arr[i] > mx) mx = arr[i];

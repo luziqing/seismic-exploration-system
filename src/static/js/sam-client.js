@@ -125,26 +125,7 @@ async function runSAMInference() {
             });
         }
         // 6. Map back to the 3D volume mask (NPY volumes only): slice mask -> voxels
-        let volNote = '';
-        if (volInfo.source === 'api/npy' && volInfo.name) {
-            try {
-                const vr = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/mask`, {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({
-                        direction: curDir, index: curIndex, mask: result.mask,
-                        mask_name: 'sam_mask', mode: 'replace', score: result.scores[0],
-                        points: picks.map(p => ({x: p.nx != null ? p.nx : p.x, y: p.ny != null ? p.ny : p.y, label: p.label}))
-                    })
-                });
-                if (vr.ok) {
-                    const v = await vr.json();
-                    volNote = ` · Voxels ${v.total_voxels} (${v.slices_written} slices)`;
-                    if (typeof refreshSurveyFootprint === 'function') refreshSurveyFootprint();
-                } else {
-                    volNote = ' · Volume mask write failed';
-                }
-            } catch (e) { volNote = ' · Volume mask write failed'; }
-        }
+        const volNote = await writeSamVolumeMask(result, picks);
         setStatus('ready', `SAM done${volNote} · Score: ${result.scores[0].toFixed(3)} · ${picks.length} points`);
     } catch(e) {
         setStatus('error', 'Inference failed: ' + errText(e));
@@ -635,17 +616,65 @@ validationModal.addEventListener('click', e => { if (e.target === validationModa
 // 3D volume mask overlay & cross-slice propagation
 // ═══════════════════════════════════════════════════════
 
+async function writeSamVolumeMask(result, picks) {
+    if (volInfo.source !== 'api/npy' || !volInfo.name) return '';
+    const volume = volInfo.name;
+    try {
+        const response = await fetch(`/api/npy/${encodeURIComponent(volume)}/mask`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                direction: curDir, index: curIndex, mask: result.mask,
+                mask_name: VOL_MASK_NAME, mode: 'replace', score: result.scores[0],
+                points: picks.map(p => ({ x: p.nx ?? p.x, y: p.ny ?? p.y, label: p.label })),
+            }),
+        });
+        if (!response.ok) return ' · Volume mask write failed';
+        const mask = await response.json();
+        refreshVolumeMaskAvailability(volume);
+        return ` · Voxels ${mask.total_voxels} (${mask.slices_written} slices)`;
+    } catch (e) {
+        return ' · Volume mask write failed';
+    }
+}
+
 const VOL_MASK_NAME = 'sam_mask';
+const volumeMaskAvailability = new Map();
+
+function hasVolumeMask(volume) {
+    if (!volumeMaskAvailability.has(volume)) {
+        const request = fetch(`/api/npy/${encodeURIComponent(volume)}/masks`)
+            .then(async response => {
+                if (!response.ok) throw await respError(response);
+                const { masks } = await response.json();
+                return masks.some(mask => mask.mask_name === VOL_MASK_NAME);
+            })
+            .catch(() => {
+                if (volumeMaskAvailability.get(volume) === request) volumeMaskAvailability.delete(volume);
+                return false;
+            });
+        volumeMaskAvailability.set(volume, request);
+    }
+    return volumeMaskAvailability.get(volume);
+}
+
+function refreshVolumeMaskAvailability(volume) {
+    volumeMaskAvailability.delete(volume);
+    if (volInfo.source === 'api/npy' && volInfo.name === volume) refreshSurveyFootprint();
+}
 
 // After a slice change, if the volume mask has content on that slice, load it as the overlay (same rendering as SAM logits)
 async function loadVolumeMaskOverlay(dir, index) {
     if (volInfo.source !== 'api/npy' || !volInfo.name) return;
+    const volume = volInfo;
+    const availability = hasVolumeMask(volume.name);
     try {
-        const r = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/mask/${VOL_MASK_NAME}/slice/${dir}/${index}`);
+        if (!await availability || volume !== volInfo) return;
+        const r = await fetch(`/api/npy/${encodeURIComponent(volume.name)}/mask/${VOL_MASK_NAME}/slice/${dir}/${index}`);
         if (!r.ok) return;
         const rows = +r.headers.get('X-Rows'), cols = +r.headers.get('X-Cols');
         const arr = new Float32Array(await r.arrayBuffer());
-        if (dir !== curDir || index !== curIndex || arr.length !== rows * cols) return;  // user already moved to another slice
+        if (volume !== volInfo || availability !== volumeMaskAvailability.get(volume.name)
+            || dir !== curDir || index !== curIndex || arr.length !== rows * cols) return;
         let any = false;
         for (let i = 0; i < arr.length; i++) if (arr[i] > 0.5) { any = true; break; }
         if (!any) return;
@@ -696,6 +725,7 @@ async function runPropagation() {
     if (isInferring || isPropagating) { setStatus('loading', 'Inference/propagation already running, please wait...'); return; }
     if (!logitsMap) { setStatus('error', 'Run SAM (▶ SAM) on the current slice first to create a seed mask'); return; }
 
+    const volume = volInfo.name;
     isPropagating = true;
     const btn = document.getElementById('btnPropagate');
     btn.disabled = true;
@@ -707,7 +737,7 @@ async function runPropagation() {
     };
     setStatus('loading', `Propagating (IL ±${lim.max_il}, XL ±${lim.max_xl}, vertical ±${lim.max_vertical})...`);
     try {
-        const resp = await fetch(`/api/npy/${encodeURIComponent(volInfo.name)}/propagate`, {
+        const resp = await fetch(`/api/npy/${encodeURIComponent(volume)}/propagate`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({direction: curDir, index: curIndex, mask_name: VOL_MASK_NAME, ...lim})
         });
@@ -715,7 +745,7 @@ async function runPropagation() {
         const r = await resp.json();
         const n = r.written_indices.length;
         const stops = [...new Set(r.slices.filter(s => s.stopped).map(s => s.stopped))];
-        if (typeof refreshSurveyFootprint === 'function') refreshSurveyFootprint();
+        refreshVolumeMaskAvailability(volume);
         setStatus('ready', `Propagation done · ${n} new slices · Voxels ${r.total_voxels}` +
             (stops.length ? ` · Stop reason: ${stops.join('/')}` : ''));
     } catch (e) {
