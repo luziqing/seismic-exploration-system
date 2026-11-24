@@ -150,4 +150,4 @@ Prior work on SAM for seismic exists and this project does not claim to be the f
 5. Press **Export Mask**: you get `…geojson`, `…csv` and `qc_log_….json`.
 6. Optional: **Propagate** extends the mask to neighbouring inlines (settings under ⚙).
 
-For setup instructions (clone, install, data generation, SAM3 weights), see the **Run it** section of the [README](../README.md).
+For setup instructions (clone, install, data generation, SAM3 weights), see the **Run it** section of the [README](https://github.com/luziqing/seismic-exploration-system#run-it).

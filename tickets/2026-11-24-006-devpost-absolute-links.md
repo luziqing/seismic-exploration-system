@@ -22,5 +22,14 @@ If a link target is unclear, do not guess: list it under 未解决的问题 and 
 ## 回单(完成时由执行者填写)
 
 - 改了哪些文件:
+  - `docs/DEVPOST.md` (last line only; link target changed, text unchanged)
+  - this ticket file (handoff)
+- 改动的链接(1 条; no other relative links found):
+  - `[README](../README.md)` → `[README](https://github.com/luziqing/seismic-exploration-system#run-it)` (README "Run it" section; `README.md` has `## Run it` at line 30, so `#run-it` is the correct anchor)
+  - External links (`https://arxiv.org/abs/2407.14121`, `https://arxiv.org/abs/2606.15786`) left unchanged.
 - 测试结果:
-- 未解决的问题:
+  - `Select-String docs\DEVPOST.md -Pattern '\]\((?!https?:)'` → no output.
+  - `git diff --stat` after the link edit → `docs/DEVPOST.md | 2 +-`, 1 file changed, 1 insertion(+), 1 deletion(-).
+  - `D:\26tmp\soft2-SGSeg\.venv\Scripts\python.exe scripts/verify.py` → `VERIFY OK in 12 s` (200 passed, 0 skipped; had to generate the demo data first because this worktree had none: `generate_synthetic_seismic.py` and `--clean` both reported `OK deterministic ... byte-identical`).
+  - Commit on `chore/simple`: `docs(devpost): absolute links for devpost.com (S12)`.
+- 未解决的问题: none. One note: `git diff --stat` also lists this ticket file after the handoff is filled, as allowed by the ticket.
