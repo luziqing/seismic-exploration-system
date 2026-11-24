@@ -143,7 +143,7 @@ Prior work on SAM for seismic exists and this project does not claim to be the f
 
 ## Testing Instructions
 
-1. Open <http://127.0.0.1:9339>. The noisy volume `synthetic_deep_v1` loads on inline 1. Type `20` in the box next to the direction menu and press **Go** (the box counts from 0; the title then reads IL 21): the deep target is the faint body near the bottom of the section (about 430–510 ms), left of the fault.
+1. Open <http://127.0.0.1:9339>. The noisy volume `synthetic_deep_v1` loads on its middle inline (IL 25). Type `20` in the box next to the direction menu and press **Go** (the box counts from 0; the title then reads IL 21): the deep target is the faint body near the bottom of the section (about 430–510 ms), left of the fault.
 2. Press **Low-freq**, then choose **Compare → Raw | Low-freq** to see both. Press **Noisy ⇄ Clean** to jump to the same inline of the clean volume. Set Compare back to **Off** and press **Raw**.
 3. On the clean volume, IL 24 (box value `23`): press **Include**, click once in the middle of the deep target, and press **▶ SAM** (Auto-refine is on). The QC panel lists the rounds; click a row to see that round's mask, with the loop's corrective points as hollow diamonds. The survey map shows the mask footprint.
 4. Do the same on the noisy volume: the panel explains that the target is too weak for the QC on that slice and keeps SAM's mask.
