@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "e6034215-dfc3-4312-a9d6-f1f6f95c5e0c",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "D:\\26tmp\\KiroProject\\SamForGeophysics\\docs\\architecture\\runtime-architecture.json",
+  "output": "D:\\26tmp\\KiroProject\\SamForGeophysics\\docs\\architecture\\runtime-architecture.html",
+  "specification": {
+    "sha256": "5abd4801f82cb87e724334f52bebac6803f6c339d9b31662738159a3f1872ad2",
+    "bytes": 3022
+  },
+  "artifact": {
+    "sha256": "58aafda35071f1f4c9ce6b9fd3d090562eb6fecebb062560bfff6a527bdf7119",
+    "bytes": 935675
+  }
+}

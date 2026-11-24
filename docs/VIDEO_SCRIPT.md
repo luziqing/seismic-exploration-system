@@ -72,3 +72,7 @@
 - No background music. Voice-over recorded separately and mixed in.
 - The text overlays with numbers should stay on screen for at least 3 seconds for readability.
 - Run E4 (3 consecutive demo flows) before the recording session.
+
+## Optional insert: architecture diagram
+
+Use `docs/architecture/runtime-architecture-dark.svg` (or the interactive `runtime-architecture.html`) as a 5 s cutaway at the end of V4a, while the voice-over says "the server renders the slice, SAM3 segments it". It adds 5 s: the total goes from 165 s to 170 s, still under the 180 s limit. Not yet placed in the shot list above; decide before recording.

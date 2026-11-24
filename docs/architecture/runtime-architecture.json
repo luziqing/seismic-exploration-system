@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "SamForGeophysics: runtime architecture", "output": "runtime-architecture.html", "quality_profile": "showcase" },
+  "components": [
+    { "id": "user", "type": "external", "label": "Interpreter", "sublabel": "Browser", "pos": [40, 300], "size": [120, 60] },
+    { "id": "ui", "type": "backend", "label": "Web UI", "sublabel": "src/static/js", "pos": [240, 300], "size": [130, 60] },
+    { "id": "api", "type": "backend", "label": "FastAPI server", "sublabel": "src/server.py", "pos": [450, 300], "size": [140, 60], "tag": "local only" },
+    { "id": "sam", "type": "backend", "label": "SAM3 inference", "sublabel": "sam_service, GPU or CPU", "pos": [690, 300], "size": [150, 60], "tag": "raw slice" },
+    { "id": "refine", "type": "backend", "label": "QC refine loop", "sublabel": "refine + qc + validation", "pos": [690, 150], "size": [150, 60], "tag": "max 3 rounds" },
+    { "id": "llm", "type": "external", "label": "LLM provider", "sublabel": "optional: cloud or local", "pos": [450, 10], "size": [140, 60] },
+    { "id": "vol", "type": "database", "label": "Volume readers", "sublabel": "npy, zarr, sgy, vds, low-freq", "pos": [240, 450], "size": [150, 60] },
+    { "id": "db", "type": "database", "label": "SQLite", "sublabel": "picks, SAM results, QC", "pos": [450, 450], "size": [140, 60] },
+    { "id": "masks", "type": "database", "label": "3-D volume masks", "sublabel": "mask + propagation", "pos": [690, 450], "size": [150, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Local machine", "wraps": ["ui", "api", "sam", "refine", "vol", "db", "masks"] }
+  ],
+  "connections": [
+    { "id": "user-ui", "from": "user", "to": "ui", "label": "click, view", "variant": "emphasis" },
+    { "id": "ui-api", "from": "ui", "to": "api", "label": "HTTP /api", "variant": "emphasis" },
+    { "id": "api-sam", "from": "api", "to": "sam", "label": "predict", "variant": "emphasis" },
+    { "id": "api-refine", "from": "api", "to": "refine", "label": "auto-refine" },
+    { "id": "refine-sam", "from": "refine", "to": "sam", "label": "re-run", "fromSide": "bottom", "toSide": "top" },
+    { "id": "api-llm", "from": "api", "to": "llm", "label": "chat", "variant": "dashed" },
+    { "id": "api-vol", "from": "api", "to": "vol", "label": "slices", "fromSide": "bottom", "toSide": "top" },
+    { "id": "api-db", "from": "api", "to": "db", "label": "SQL", "fromSide": "bottom", "toSide": "top" },
+    { "id": "sam-masks", "from": "sam", "to": "masks", "label": "mask write-back", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Low-frequency view", "items": ["For the interpreter's eyes", "SAM3 and QC read the raw slice"] },
+    { "dot": "emerald", "title": "QC loop", "items": ["Label-free score, one corrective point per round", "Keeps the best round; declines on weak targets"] },
+    { "dot": "rose", "title": "Scope", "items": ["Synthetic data only", "No hosted instance"] }
+  ]
+}
+
+

@@ -132,6 +132,10 @@ Other controls (SEG-Y / VDS loading, playback, gain, AI assistant) are under **M
 
 ## How it works
 
+![Runtime architecture](docs/architecture/runtime-architecture-light.svg)
+
+*Runtime architecture, generated with [Archify](https://github.com/tt-a1i/archify) from [`docs/architecture/runtime-architecture.json`](docs/architecture/runtime-architecture.json). The interactive version is `docs/architecture/runtime-architecture.html`.*
+
 | Part | File |
 |---|---|
 | Synthetic model: four horizons, a fault, a weak 10 Hz deep target; noisy and clean variants; ground-truth masks | `scripts/generate_synthetic_seismic.py` |

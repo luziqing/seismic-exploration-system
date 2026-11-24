@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "accepted": [
+    {
+      "id": "COMP-19880a8aa971",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "287424c3c8201a3c7b70494f6c7734594511a6a160036c72bb1af1ed69e6a027"
+    },
+    {
+      "id": "COMP-233e96c6e0cf",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "352cb18e224dcd7baa293c2b9c10d831c8ed9ac5704635a7c733a5a9829a44f4"
+    },
+    {
+      "id": "COMP-29ca59c0512c",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "a5d243ff732b670e5625b7d378cf849d960b1dd3246a942a2a0361ecd342d320"
+    },
+    {
+      "id": "COMP-32fb1efe6676",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "9e23424b6254c7dcaae307775c29960dec34c5b9aef10175a4c2b937782d39c9"
+    },
+    {
+      "id": "COMP-3c4a8fcd9b3e",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "e695fddf1f407780cde856d5fe93d4728eb152fb7528ae533663d0c310639ae2"
+    },
+    {
+      "id": "COMP-463cd06456ae",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "1686fbf657733d7bcb6cd74bedced3894f7c61920aa491dcd69921f897f7a8c0"
+    },
+    {
+      "id": "COMP-472925a38aac",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "718a1bce3757cca16f34c933d48b5066b3256d04ee959a17199c6b62af7046a0"
+    },
+    {
+      "id": "COMP-9119fb698376",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "17bee9fdb010c1fd8c30f247a1e850d0948b526fca1d2bed135fae7bcba3ea7d"
+    },
+    {
+      "id": "COMP-9d2fec9ea953",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "2afa4e824c02760285d0d96f8ca63757c25656dd838a074bf03d029ffa1cbc67"
+    },
+    {
+      "id": "COMP-c2b4b587e242",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "8456ba2023e7d4f4cdba013161cd81f953e56ad75b6f2265d3a68f271153907b"
+    },
+    {
+      "id": "COMP-c3a6c1c8b96c",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "92dad76cd4397324e3880a39949c9af34a259a120ec7abeafaf7d81e9e17d7f4"
+    },
+    {
+      "id": "COMP-c3fc821557e2",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "cb4968f170cb271f1d76ea887127379942bedf16a98d8f077e42a0899c4343f2"
+    },
+    {
+      "id": "COMP-dc510cc13287",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "052e9733a65c2a3b8e062ccde04238f572535ba1ad4cef698392a3d77a43b330"
+    },
+    {
+      "id": "COMP-e0b34addc175",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "7cab4dbcf928ce4892bd6816ef9e7932db83fbf32f87cbbca023e0fcd2727801"
+    },
+    {
+      "id": "COMP-e0ceb67f4dae",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "611e9be801188f2c18b421523f286055673a2934db1a7d7dc1627beb8aacc0a4"
+    },
+    {
+      "id": "COMP-e7bcff5a3b0f",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "f555e2119aecb983b069fa7ba93ed46f2b6ef16096be7480236deff59e22a7a2"
+    },
+    {
+      "id": "COMP-f85f301c54f7",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "4e72d17d24d8f8be63bc3a0d4e0ceabda2cd5090225828183cb3f36824ec3c56"
+    }
+  ]
+}

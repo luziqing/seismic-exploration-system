@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "accepted": [
+    {
+      "id": "COMP-14357673fe0f",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "2a3c49f83fa25cccc98398f66c23282aae880eb5294188207e414c7e3390893c"
+    },
+    {
+      "id": "COMP-14c606df0441",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "f528de5fb150c0b58020d29924a0e45c6456fdb3cd7d5eaa6c6ce76ef17fe6ae"
+    },
+    {
+      "id": "COMP-4bbe12a8ebcd",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "cdd0cd09adee79bdc5f54943236e7558c89a32a52323015f696d8017db14f3c8"
+    },
+    {
+      "id": "COMP-5807992dd6f0",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "0e8c0ff5c6760e951643a7eb04d8b17f16fe7194fcead9a0ce9c00cf4dbbe608"
+    },
+    {
+      "id": "COMP-5b18e9eac562",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "a8ebd713d727fa62382c7f0f8213c1a295e54d253656c4851176ed5d1788cade"
+    },
+    {
+      "id": "COMP-8efc5086af06",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "8dfcd11f15ff96c26ca3b09fb7bee551073b4501769c8a0a768e5288fcfa8113"
+    },
+    {
+      "id": "COMP-b21269b26f1d",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "db56791945821b9a7c4e5a555d60dcadd612e0638c631475a80e39d25504adaa"
+    },
+    {
+      "id": "COMP-f8b87a0aa87c",
+      "code": "complexity/function",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "2f26da7cca794e71a74cf7db138f65160545b488cc71fa9d7a2e70d73f5cc26a"
+    },
+    {
+      "id": "COUP-47bc25696d18",
+      "code": "coupling/internal-leak",
+      "reason": "existing complexity debt when analysis was adopted (2026-11)",
+      "sha256": "5196fd9910d7c35d65a126f268103abcb80e2755a2ab8114a649bda930d6988a"
+    }
+  ]
+}
