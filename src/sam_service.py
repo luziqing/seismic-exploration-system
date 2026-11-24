@@ -279,6 +279,45 @@ def predict_mask(embedding_id: str, points: list[list[float]],
     }
 
 
+def _prompted_mask_data(results):
+    if not results or results[0].masks is None:
+        return None, "results empty or masks is None"
+
+    # Extract mask data
+    masks_data = results[0].masks.data  # shape: [N, H, W]
+    if masks_data is None:
+        return None, "masks.data is None"
+    if getattr(masks_data, "shape", None) is None or len(masks_data.shape) < 3:
+        return None, f"unexpected mask shape: {getattr(masks_data, 'shape', None)}"
+    if int(masks_data.shape[0]) == 0:
+        return None, "masks.data contains zero masks"
+
+    return masks_data, ""
+
+
+def _prompted_mask_score(result, mask: np.ndarray) -> float:
+    # score: boxes.conf first, then masks.iou, finally an estimate from the mask area fraction
+    score = 0.0
+    boxes = getattr(result, "boxes", None)
+    box_conf = getattr(boxes, "conf", None) if boxes is not None else None
+    if box_conf is not None and len(box_conf) > 0:
+        conf_arr = box_conf.cpu().numpy() if isinstance(box_conf, torch.Tensor) else np.array(box_conf)
+        score = float(conf_arr[0])
+    else:
+        masks_obj = getattr(result, "masks", None)
+        iou = getattr(masks_obj, "iou", None) if masks_obj is not None else None
+        if iou is not None:
+            iou_arr = iou.cpu().numpy() if isinstance(iou, torch.Tensor) else np.array(iou)
+            if len(iou_arr) > 0:
+                score = float(iou_arr[0])
+    # Final fallback: use the non-zero mask area fraction as the confidence estimate
+    if score <= 0.0 and mask is not None:
+        positive_ratio = float(np.mean(mask > 0.5))
+        if positive_ratio > 0:
+            score = min(0.5, positive_ratio)  # conservative estimate, capped at 0.5
+    return score
+
+
 def predict_mask_np(embedding_id: str, points: list[list[float]],
                     labels: list[int]) -> dict:
     """Same as predict_mask, but returns the mask as a float32 ndarray (for cross-slice propagation, skips JSON/list conversion)."""
@@ -296,17 +335,9 @@ def predict_mask_np(embedding_id: str, points: list[list[float]],
     results = _run_prompted(embedding_id, image_path, points, labels)
     t_infer = time.perf_counter() - t0
 
-    if not results or results[0].masks is None:
-        return _empty_mask_np(image_path, "results empty or masks is None")
-
-    # Extract mask data
-    masks_data = results[0].masks.data  # shape: [N, H, W]
-    if masks_data is None:
-        return _empty_mask_np(image_path, "masks.data is None")
-    if getattr(masks_data, "shape", None) is None or len(masks_data.shape) < 3:
-        return _empty_mask_np(image_path, f"unexpected mask shape: {getattr(masks_data, 'shape', None)}")
-    if int(masks_data.shape[0]) == 0:
-        return _empty_mask_np(image_path, "masks.data contains zero masks")
+    masks_data, reason = _prompted_mask_data(results)
+    if reason:
+        return _empty_mask_np(image_path, reason)
 
     # Post-processing: extract the mask and downsample
     t1 = time.perf_counter()
@@ -316,25 +347,7 @@ def predict_mask_np(embedding_id: str, points: list[list[float]],
     else:
         mask = np.array(masks_data[0], dtype=np.float32)
 
-    # score: boxes.conf first, then masks.iou, finally an estimate from the mask area fraction
-    score = 0.0
-    boxes = getattr(results[0], "boxes", None)
-    box_conf = getattr(boxes, "conf", None) if boxes is not None else None
-    if box_conf is not None and len(box_conf) > 0:
-        conf_arr = box_conf.cpu().numpy() if isinstance(box_conf, torch.Tensor) else np.array(box_conf)
-        score = float(conf_arr[0])
-    else:
-        masks_obj = getattr(results[0], "masks", None)
-        iou = getattr(masks_obj, "iou", None) if masks_obj is not None else None
-        if iou is not None:
-            iou_arr = iou.cpu().numpy() if isinstance(iou, torch.Tensor) else np.array(iou)
-            if len(iou_arr) > 0:
-                score = float(iou_arr[0])
-    # Final fallback: use the non-zero mask area fraction as the confidence estimate
-    if score <= 0.0 and mask is not None:
-        positive_ratio = float(np.mean(mask > 0.5))
-        if positive_ratio > 0:
-            score = min(0.5, positive_ratio)  # conservative estimate, capped at 0.5
+    score = _prompted_mask_score(results[0], mask)
 
     h, w = mask.shape
 
