@@ -49,6 +49,30 @@ def _correction(q: dict) -> tuple[tuple[int, int], int, int, str] | None:
     return (r, c), label, size, kind
 
 
+def _validate_run_inputs(user_points: Sequence[dict], max_rounds: int) -> None:
+    if not 1 <= max_rounds <= MAX_ROUNDS:
+        raise ValueError(f"max_rounds must be in [1, {MAX_ROUNDS}]")
+    if not user_points:
+        raise ValueError("at least one point is required")
+    if not any(int(p["label"]) == 1 for p in user_points):
+        raise ValueError("at least one include (positive) point is required")
+
+
+def _score_round(raw: np.ndarray, prompts: list[dict], seeds: list[tuple[float, float]],
+                 segment_fn: SegmentFn, target_type: str, direction: str,
+                 r: int, rounds: list[dict]) -> tuple[dict, dict]:
+    mask = np.asarray(segment_fn([(p["row"], p["col"]) for p in prompts], [p["label"] for p in prompts]),
+                      dtype=bool)
+    if mask.shape != raw.shape:
+        raise ValueError(f"segmenter returned shape {mask.shape}, expected {raw.shape}")
+    q = qc.score_mask(raw, mask, seeds, target_type=target_type, direction=direction)
+    prev = rounds[-1]["score"] if rounds else None
+    rec = {"round": r, "prompts": [dict(p) for p in prompts], "metrics": qc.public(q),
+           "score": float(q["score"]), "delta": None if prev is None else float(q["score"] - prev),
+           "mask": mask, "correction": None}
+    return rec, q
+
+
 def run(raw_slice: np.ndarray, user_points: Sequence[dict], segment_fn: SegmentFn,
         target_type: str = "deep_target", direction: str = "inline", max_rounds: int = MAX_ROUNDS) -> dict:
     """
@@ -56,12 +80,7 @@ def run(raw_slice: np.ndarray, user_points: Sequence[dict], segment_fn: SegmentF
     {"rounds": [...], "best_round", "stop_reason", "stop_message", "constants"}.
     Each round: {"round", "prompts", "metrics", "score", "delta", "mask", "correction"}.
     """
-    if not 1 <= max_rounds <= MAX_ROUNDS:
-        raise ValueError(f"max_rounds must be in [1, {MAX_ROUNDS}]")
-    if not user_points:
-        raise ValueError("at least one point is required")
-    if not any(int(p["label"]) == 1 for p in user_points):
-        raise ValueError("at least one include (positive) point is required")
+    _validate_run_inputs(user_points, max_rounds)
     raw = np.asarray(raw_slice, dtype=np.float32)
     prompts = [{"row": float(p["row"]), "col": float(p["col"]), "label": int(p["label"]), "source": "user"}
                for p in user_points]
@@ -69,18 +88,10 @@ def run(raw_slice: np.ndarray, user_points: Sequence[dict], segment_fn: SegmentF
 
     rounds, best, stop = [], None, "max_rounds"
     for r in range(1, max_rounds + 1):
-        mask = np.asarray(segment_fn([(p["row"], p["col"]) for p in prompts], [p["label"] for p in prompts]),
-                          dtype=bool)
-        if mask.shape != raw.shape:
-            raise ValueError(f"segmenter returned shape {mask.shape}, expected {raw.shape}")
-        q = qc.score_mask(raw, mask, seeds, target_type=target_type, direction=direction)
-        prev = rounds[-1]["score"] if rounds else None
-        rec = {"round": r, "prompts": [dict(p) for p in prompts], "metrics": qc.public(q),
-               "score": float(q["score"]), "delta": None if prev is None else float(q["score"] - prev),
-               "mask": mask, "correction": None}
+        rec, q = _score_round(raw, prompts, seeds, segment_fn, target_type, direction, r, rounds)
         rounds.append(rec)
 
-        if not mask.any():
+        if not rec["mask"].any():
             stop = "empty_mask"
             break
         if r == 1 and not q["reliable"]:
