@@ -28,6 +28,6 @@ No invented numbers. Do not re-run `measure_refine.py` or `measure_lowfreq.py`. 
 
 ## 回单(完成时由执行者填写)
 
-- 改了哪些文件:
-- 测试结果:
-- 未解决的问题:
+- 改了哪些文件: E4 report, Kiro build log, and this handoff.
+- 测试结果: Live CUDA refine and propagation passed, HTTP frontend checks passed on a cold server, and VERIFY OK. All three browser cycles exported the selected round on a single page.
+- 未解决的问题: E4 console acceptance remains open. Missing saved masks produce non-favicon HTTP 404 console errors. No pre-refactor comparison was run.

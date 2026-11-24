@@ -28,3 +28,6 @@ Run by a sub-agent that had not seen the repository, following only the README, 
   - `timm` was missing from `requirements.txt`: ultralytics tried to pip-install it at the first SAM call, which hung on a machine without internet;
   - the SHA-256 check now prints `True` instead of asking the reader to compare 64 characters.
 - **Not a README problem, for the owner:** the repository was not reachable anonymously (GitHub API answered 404), so the sub-agent cloned from a git bundle. Judges need it public.
+## E4 browser and GPU verification — 2026-11-24
+
+Real SAM3 refine and propagation checks passed. Headless Chrome completed three consecutive demo cycles on one page, including selected-round export. The console criterion failed on saved-mask lookups returning HTTP 404. See [the E4 report](reports/E4-20261124.md).
