@@ -17,11 +17,11 @@
   - "Works out of the box" is not allowed: the app needs Python setup and 3.5 GB of weights. Say "without the SAM3 weights the app still opens; browsing, the low-frequency view, compare and export keep working" only if you verified it.
 - 不许碰的路径: `src/`, `.kiro/`, `scripts/`, `tests/`, `data/` (except your local junction, never committed), `docs/MEASUREMENTS.md`, `docs/VIDEO_SCRIPT.md`, the last paragraph of `docs/DEVPOST.md` that links to the README (aux-simple owns that line), other worktrees, main/kiro branches.
 - 验收清单:
-  - [ ] Screenshots exist, are under 400 KB each, and show the described state (lead-kiro will open them).
-  - [ ] README renders the image with a relative path that resolves.
-  - [ ] `python scripts/verify.py` prints VERIFY OK; CJK grep empty.
-  - [ ] Server stopped, test masks deleted, `git status` clean after commit.
-  - [ ] Commit on `feat/ui-docs`: `docs(readme): workspace preview screenshots and Devpost design wording (S12)`. Do not push, do not merge.
+  - [x] Screenshots exist, are under 400 KB each, and show the described state (lead-kiro will open them).
+  - [x] README renders the image with a relative path that resolves.
+  - [x] `python scripts/verify.py` prints VERIFY OK; CJK grep empty.
+  - [x] Server stopped, test masks deleted, `git status` clean after commit.
+  - [x] Commit on `feat/ui-docs`: `docs(readme): workspace preview screenshots and Devpost design wording (S12)`. Do not push, do not merge.
 - 截止时间: 2026-11-26
 
 Do not log in anywhere, do not upload or post anything.
@@ -29,5 +29,17 @@ Do not log in anywhere, do not upload or post anything.
 ## 回单(完成时由执行者填写)
 
 - 改了哪些文件:
+  - `docs/images/workspace-compare-raw-lowfreq.png`: real 1600×900 screenshot of Compare Raw | Low-freq on noisy volume IL 21 (372.9 KB).
+  - `docs/images/workspace-qc-panel-clean.png`: real 1600×900 screenshot of 3-round QC refine panel, mask overlay and corrective point on clean volume IL 24 (184.0 KB).
+  - `README.md`: added "The workspace at a glance" visual block under "What it does" with relative image links and factual caption lines.
+  - `docs/DEVPOST.md`: updated "What It Does" with ergonomics and design explanations, strictly adhering to honest wording rules with all puffery removed.
+  - `docs/kiro/reports/S12-ui-preview-20261124.md`: completed report adhering to guide.md section 10 template.
+  - `tickets/2026-11-24-005-readme-ui-preview.md`: completed checklist and handoff.
 - 测试结果:
+  - Real screenshots captured via headless Chrome CDP at 1600×900 against local server on port 9341 with GPU SAM3 inference.
+  - Image sizes: 372.9 KB and 184.0 KB (both strictly < 400 KB).
+  - CJK grep across modified markdown files: 0 matches.
+  - `python scripts/verify.py`: `VERIFY OK in 12 s` (JS syntax 9/9, Python AST 15/15, Preflight OK, 200 tests passed, Demo data deterministic).
+  - Cleanup: test masks deleted, no background processes remaining.
 - 未解决的问题:
+  - 无。
