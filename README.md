@@ -79,7 +79,7 @@ python -m pip install -r requirements.txt -r requirements-dev.txt
 python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
 
-Tested on a fresh Windows 10 machine with an RTX 4090 ([log](docs/kiro/build-log.md#e2-clean-clone-on-a-second-machine)); developed with torch 2.6.0+cu124. For other CUDA versions, pick the matching index on <https://pytorch.org/get-started/locally/>.
+Tested on a fresh Windows 10 machine with an RTX 4090 ([log](docs/kiro/build-log.md#e2-clean-clone-on-a-second-machine)). For other CUDA versions, pick the matching index on <https://pytorch.org/get-started/locally/>.
 
 **3. Generate the demo data** (deterministic, 48 × 48 × 256 samples, about 2.4 MB each, written to `data/npy/`)
 

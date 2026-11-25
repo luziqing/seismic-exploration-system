@@ -8,7 +8,7 @@
 
 ## Inspiration
 
-Seismic interpreters look for weak deep targets — thin, low-amplitude reflections buried beneath kilometres of stronger signal and noise. These targets carry information about deep geology, but they are often invisible in a standard amplitude display and easy to miss entirely.
+Seismic interpreters look for weak deep targets — thin, low-amplitude reflections buried below stronger reflections and noise. These targets carry information about deep geology, but they are often invisible in a standard amplitude display and easy to miss entirely.
 
 Foundation vision models like SAM have been applied to seismic data before: *Seismic Fault SAM* (Chen, Zhang & Ma, [arXiv:2407.14121](https://arxiv.org/abs/2407.14121)) adapts SAM for fault detection with lightweight modules and a 2.5D strategy, and *Domain-Guided Prompting of SAM for Seismic Interpretation* (Ahmad, Bedle & Mustafa, [arXiv:2606.15786](https://arxiv.org/abs/2606.15786)) conditions SAM's input with seismic attributes and colormaps for zero-shot interpretation. Both show SAM can work on seismic sections.
 
@@ -77,7 +77,7 @@ Checked; no power was installed or used.
 
 1. **The first QC design failed its own test.** The spec required the ground truth to rank best among constructed masks. A property-based test found that adding background to an exact mask *raised* its score, and the full acceptance check showed 0 of 12 passes on the demo data. The owner chose a redesign (design C + decision A), and the spec was changed first, then the code.
 
-2. **SAM segmented the UI overlay, not the seismic data.** On the very first in-browser SAM run, the browser embedded a screenshot of the live canvas — including the 6×6 px pick marker. SAM segmented the marker (32 mask pixels) instead of the deep target (521,298 without the marker). Fix: a new `/embed` endpoint renders the slice on the server in a clean, uniform integer upscale, so the embedding never contains UI overlays.
+2. **SAM segmented the UI overlay, not the seismic data.** On the very first in-browser SAM run, the browser embedded a screenshot of the live canvas — including the 6×6 px pick marker. The UI pick produced a 32-pixel marker mask, whereas clean server rendering produced a 521,298-pixel mask (these pixel counts expose the overlay-corruption bug and are not ground-truth target measurements). Fix: a new `/embed` endpoint renders the slice on the server in a clean, uniform integer upscale, so the embedding never contains UI overlays.
 
 3. **The low-frequency view helps interpreters but hurts SAM on noisy data.** On the noisy volume, SAM with one click reaches mean IoU 0.43 on raw but only 0.06 on low-freq. The low-frequency view separates the target by energy but does not help SAM on the noisy volume. The measurement decided the default: SAM and the loop always segment the raw slice, whatever view is displayed.
 
@@ -97,7 +97,7 @@ All numbers below are on our synthetic model and come from `docs/MEASUREMENTS.md
 
 - **200 tests green**, including property-based tests that found a counterexample to the declared QC design and forced a redesign.
 
-- **Clean clone verified** on a second machine by a sub-agent that had never seen the repository, following only the README.
+- **Clean clone verified** on a second machine by a sub-agent that had never seen the repository, following the README after obtaining the repository bundle.
 
 ## What We Learned
 
