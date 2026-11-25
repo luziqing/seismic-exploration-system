@@ -79,7 +79,7 @@ python -m pip install -r requirements.txt -r requirements-dev.txt
 python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
 
-Tested on Windows 10 with an RTX 4090 and torch 2.6.0+cu124, following these steps on a fresh machine ([log](docs/kiro/build-log.md#e2-clean-clone-on-a-second-machine)). For other CUDA versions, pick the matching index on <https://pytorch.org/get-started/locally/>.
+Tested on a fresh Windows 10 machine with an RTX 4090 ([log](docs/kiro/build-log.md#e2-clean-clone-on-a-second-machine)); developed with torch 2.6.0+cu124. For other CUDA versions, pick the matching index on <https://pytorch.org/get-started/locally/>.
 
 **3. Generate the demo data** (deterministic, 48 × 48 × 256 samples, about 2.4 MB each, written to `data/npy/`)
 
@@ -132,7 +132,7 @@ Without `data/weights/sam3.pt` the app still opens. Browsing, the low-frequency 
 1. Open <http://127.0.0.1:9339>. The noisy volume `synthetic_deep_v1` loads on its middle inline (IL 25). Type `20` in the box next to the direction menu and press **Go** (the box counts from 0; the title then reads IL 21): the deep target is the faint body near the bottom of the section (about 430–510 ms), left of the fault.
 2. Press **Low-freq**, then choose **Compare → Raw | Low-freq** to see both. Press **Noisy ⇄ Clean** to jump to the same inline of the clean volume. Set Compare back to **Off** and press **Raw**.
 3. On the clean volume, IL 24 (box value `23`): press **Include**, click once in the middle of the deep target, and press **▶ SAM** (Auto-refine is on). The QC panel lists the rounds; click a row to see that round's mask, with the loop's corrective points as hollow diamonds. The survey map shows the mask footprint.
-4. Do the same on the noisy volume: the panel explains that the target is too weak for the QC on that slice and keeps SAM's mask.
+4. Do the same on the noisy volume: the gate stops the loop on most slices of the noisy volume (18 of 19 in the measurement); the panel explains that the target is too weak for the QC on that slice and keeps SAM's mask.
 5. Press **Export Mask**: you get `…geojson`, `…csv` and `qc_log_….json`.
 6. Optional: **Propagate** extends the mask to neighbouring inlines (settings under ⚙).
 
