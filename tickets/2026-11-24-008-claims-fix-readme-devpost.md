@@ -14,14 +14,21 @@
 - 不许碰的路径: everything except `README.md`, `docs/DEVPOST.md`, a report file and this ticket. Not `docs/VIDEO_SCRIPT.md` (aux-simple owns it in ticket 009). Not `docs/MEASUREMENTS.md`, `.kiro/`, `src/`.
 - 输出: the edits; `docs/kiro/reports/S12-claims-fix-20261124.md` (guide.md section 10 format) listing each audit item and the exact before/after text.
 - 验收清单:
-  - [ ] Each FIX row for README (1, 2) and DEVPOST (1–9) has a before/after line in the report.
-  - [ ] No new number; no new adjective claim ("unique", "first", "production", "real-time", "seamless").
-  - [ ] `python scripts/verify.py` VERIFY OK; CJK grep empty.
-  - [ ] Commit on `feat/ui-docs`: `docs: claims-audit fixes for README and Devpost (E7)`. Do not push, do not merge.
+  - [x] Each FIX row for README (1, 2) and DEVPOST (1–9) has a before/after line in the report.
+  - [x] No new number; no new adjective claim ("unique", "first", "production", "real-time", "seamless").
+  - [x] `python scripts/verify.py` VERIFY OK; CJK grep empty.
+  - [x] Commit on `feat/ui-docs`: `docs: claims-audit fixes for README and Devpost (E7)`. Do not push, do not merge.
 - 截止时间: 2026-11-25
 
 ## 回单(完成时由执行者填写)
 
 - 改了哪些文件:
+  - `README.md`: Step 2 torch version clarified as developed with torch 2.6.0+cu124; Testing step 4 softened with measurement count (18 of 19).
+  - `docs/DEVPOST.md`: Resolved audit items 1–9 (SAM vs SAM3 distinction, removed unbacked gap claim in inspiration, narrowed low-frequency view challenge to noisy data, added Meta weights source and SAM license, removed 'saved the most time' claim, removed 'before the second run passed', updated horizon closure note to deferred, removed hackathon vs science generalization, reworded property test accomplishment to match tasks.md, and aligned testing step 4).
+  - `docs/kiro/reports/S12-claims-fix-20261124.md`: Detailed before/after text for all audit items in guide.md section 10 format.
+  - `tickets/2026-11-24-008-claims-fix-readme-devpost.md`: Completed checklist and handoff.
 - 测试结果:
+  - CJK regex check across codebase and modified markdown files: 0 matches.
+  - `python scripts/verify.py`: `VERIFY OK in 20 s` (JS syntax 9/9, Python AST 15/15, Preflight OK, 200 tests passed, Demo data deterministic).
 - 未解决的问题:
+  - 无。
