@@ -31,7 +31,7 @@ Every number below is printed by a script and recorded with its conditions in [`
 |---|---|---|
 | Does the low-frequency view separate the deep target from the background? | Noisy volume: AUC 0.44 (raw) → 0.93 (low-freq). The model was built with a 10 Hz target, so this confirms the pipeline, not real-data separability | `scripts/measure_lowfreq.py` |
 | Which view should SAM3 segment? | The raw one. One click on the noisy volume: mean IoU 0.43 on raw vs 0.06 on low-freq. So the low-frequency view is for the interpreter's eyes; SAM3 and the QC always work on the raw slice | `scripts/measure_refine.py` |
-| Does the QC loop improve a one-click SAM3 mask? | Clean volume, 19 inlines: mean IoU 0.80 → 0.81 (median 0.88 → 0.89); better on 9 slices, worse on 3, unchanged on 7. On the noisy volume the loop declined to run on 18 of 19 slices because the target is too weak for the check | `scripts/measure_refine.py` |
+| Does the QC loop improve a one-click SAM3 mask? | Clean volume, raw view, 19 inlines (one simulated include click placed at the interior point of the ground-truth target slice, the pixel farthest from its edge): mean IoU 0.80 → 0.81 (median 0.88 → 0.89); better on 9 slices, worse on 3, unchanged on 7. On the noisy volume the loop declined to run on 18 of 19 slices because the target is too weak for the check | `scripts/measure_refine.py` |
 
 IoU is measured against the generator's ground-truth mask, which the loop never sees. The loop is not guaranteed to improve a mask: on 3 of the 19 clean slices it kept a round that scored better on QC but worse against the truth.
 
@@ -39,7 +39,7 @@ IoU is measured against the generator's ground-truth mask, which the loop never 
 
 The app is a local web app: a Python server plus a page in your browser. There is no hosted instance.
 
-**Platform:** Windows 10/11 or Linux desktop, a current Chrome / Edge / Firefox. An NVIDIA GPU is recommended; on CPU, each new slice takes about 15 s to encode for SAM3.
+**Platform:** Windows 10/11 or Linux desktop, a current desktop browser (tested with Chrome only). An NVIDIA GPU is recommended; on CPU, each new slice takes about 15 s to encode for SAM3.
 
 **Prerequisites**
 
@@ -75,7 +75,7 @@ python3.12 -m venv .venv && source .venv/bin/activate
 python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 # Then the app (and the test tools):
 python -m pip install -r requirements.txt -r requirements-dev.txt
-# Check: should print a "+cu124" version and True
+# Check: should print True for CUDA
 python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
 
