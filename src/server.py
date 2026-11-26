@@ -120,7 +120,16 @@ class LLMConfigRequest(BaseModel):
     api_key: str = ""
     model: str = ""
     local_url: str = ""
+    base_url: str = ""
     system_prompt: str = ""
+
+class LLMTestRequest(BaseModel):
+    provider: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+    local_url: str | None = None
+    base_url: str | None = None
+    system_prompt: str | None = None
 
 class LLMChatRequest(BaseModel):
     messages: list[dict]  # [{"role": "user"/"assistant"/"system", "content": "..."}]
@@ -1074,8 +1083,26 @@ async def update_llm_config(config: LLMConfigRequest):
     """Update the LLM config and save it to data/llm_config.json"""
     try:
         return llm_service.update_config(config.model_dump())
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Failed to update LLM config: {e}")
+
+
+@app.post("/api/llm/test")
+async def test_llm_connection(req: LLMTestRequest | None = None):
+    """Test the current or draft LLM configuration against the upstream endpoint."""
+    override = req.model_dump(exclude_none=True) if req else None
+    try:
+        reply = await llm_service.test_connection(override)
+        return {"ok": True, "reply": reply}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+    except Exception as e:
+        logger.error("LLM test error: %s", e)
+        raise HTTPException(502, f"Connection test failed: {e}")
 
 
 @app.post("/api/llm/chat")
@@ -1086,7 +1113,7 @@ async def llm_chat(req: LLMChatRequest):
             async for token in llm_service.chat(req.messages, stream=True):
                 yield f"data: {json_mod.dumps({'token': token}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
-        except ValueError as e:
+        except (ValueError, RuntimeError) as e:
             yield f"data: {json_mod.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error("LLM chat error: %s", e)
@@ -1111,7 +1138,7 @@ async def llm_analyze(req: LLMAnalyzeRequest):
             async for token in llm_service.analyze_image(req.image_base64, req.context):
                 yield f"data: {json_mod.dumps({'token': token}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
-        except ValueError as e:
+        except (ValueError, RuntimeError) as e:
             yield f"data: {json_mod.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error("LLM analyze error: %s", e)
