@@ -105,13 +105,58 @@ function setChatLoading(show) {
 
 // ── SSE streaming core ──────────────────────────────────────
 
+async function extractHttpError(resp) {
+    const raw = await resp.text();
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.detail) return parsed.detail;
+        if (parsed && parsed.error) return typeof parsed.error === 'string' ? parsed.error : (parsed.error.message || raw);
+    } catch (e) {}
+    return raw || ('HTTP ' + resp.status);
+}
+
+async function readSSEStream(resp, onToken) {
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const rawLine of lines) {
+            const line = rawLine.trimEnd();
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+            let parsed;
+            try {
+                parsed = JSON.parse(payload);
+            } catch (e) {
+                continue;
+            }
+            if (parsed.error) {
+                throw new Error(parsed.error);
+            }
+            if (parsed.token) {
+                onToken(parsed.token);
+            }
+        }
+    }
+}
+
 async function sendChatMessage() {
     const text = chatInputEl.value.trim();
     if (!text || chatStreaming) return;
     chatInputEl.value = '';
     chatInputEl.focus();
 
-    chatMessages.push({ role: 'user', content: text });
+    const userMsg = { role: 'user', content: text };
+    chatMessages.push(userMsg);
     appendMessage('user', text);
 
     setChatLoading(true);
@@ -119,6 +164,7 @@ async function sendChatMessage() {
 
     const msgEl = appendMessage('assistant', '');
     let fullContent = '';
+    let hadError = false;
 
     chatAbortController = new AbortController();
     try {
@@ -130,54 +176,26 @@ async function sendChatMessage() {
         });
 
         if (!resp.ok) {
-            const errText = await resp.text();
-            throw new Error('HTTP ' + resp.status + ': ' + errText);
+            throw new Error(await extractHttpError(resp));
         }
 
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const payload = line.slice(6).trim();
-                    if (payload === '[DONE]') continue;
-                    try {
-                        const parsed = JSON.parse(payload);
-                        if (parsed.token) {
-                            fullContent += parsed.token;
-                            msgEl.textContent = fullContent;
-                            scrollChatToBottom();
-                        } else if (parsed.error) {
-                            fullContent = parsed.error;
-                            msgEl.textContent = '❌ ' + fullContent;
-                        }
-                    } catch (e) {
-                        // skip JSON that does not parse
-                    }
-                }
-            }
-        }
+        await readSSEStream(resp, (token) => {
+            fullContent += token;
+            msgEl.textContent = fullContent;
+            scrollChatToBottom();
+        });
     } catch (err) {
         if (err.name !== 'AbortError') {
-            msgEl.textContent = '❌ Connection failed: ' + err.message;
-            fullContent = msgEl.textContent;
+            hadError = true;
+            msgEl.textContent = '❌ ' + err.message;
         }
     } finally {
         setChatLoading(false);
         chatStreaming = false;
         chatAbortController = null;
-        if (fullContent && !fullContent.startsWith('❌')) {
+        if (!hadError && fullContent) {
             chatMessages.push({ role: 'assistant', content: fullContent });
-        } else if (!fullContent) {
+        } else if (!hadError && !fullContent) {
             chatMessages.push({ role: 'assistant', content: '(empty response)' });
             msgEl.textContent = '(empty response)';
         }
@@ -189,6 +207,12 @@ async function sendChatMessage() {
 function toggleChatSidebar() {
     chatSidebarVisible = !chatSidebarVisible;
     if (chatSidebarVisible) {
+        const moreMenu = document.getElementById('moreMenu');
+        if (moreMenu && moreMenu.classList.contains('open')) {
+            moreMenu.classList.remove('open');
+            const moreBtn = document.getElementById('btnMore');
+            if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
+        }
         chatSidebarEl.style.display = 'flex';
         // Make room in the main container
         const mainContainer = document.querySelector('.main-container');
@@ -333,6 +357,7 @@ async function analyzeSlice() {
 
     const msgEl = appendMessage('assistant', '');
     let fullContent = '';
+    let hadError = false;
 
     chatAbortController = new AbortController();
     try {
@@ -344,52 +369,26 @@ async function analyzeSlice() {
         });
 
         if (!resp.ok) {
-            const errText = await resp.text();
-            throw new Error('HTTP ' + resp.status + ': ' + errText);
+            throw new Error(await extractHttpError(resp));
         }
 
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const payload = line.slice(6).trim();
-                    if (payload === '[DONE]') continue;
-                    try {
-                        const parsed = JSON.parse(payload);
-                        if (parsed.token) {
-                            fullContent += parsed.token;
-                            msgEl.textContent = fullContent;
-                            scrollChatToBottom();
-                        } else if (parsed.error) {
-                            fullContent = parsed.error;
-                            msgEl.textContent = '❌ ' + fullContent;
-                        }
-                    } catch (e) {}
-                }
-            }
-        }
+        await readSSEStream(resp, (token) => {
+            fullContent += token;
+            msgEl.textContent = fullContent;
+            scrollChatToBottom();
+        });
     } catch (err) {
         if (err.name !== 'AbortError') {
+            hadError = true;
             msgEl.textContent = '❌ Analysis failed: ' + err.message;
-            fullContent = msgEl.textContent;
         }
     } finally {
         setChatLoading(false);
         chatStreaming = false;
         chatAbortController = null;
-        if (fullContent && !fullContent.startsWith('❌')) {
+        if (!hadError && fullContent) {
             chatMessages.push({ role: 'assistant', content: fullContent });
-        } else if (!fullContent) {
+        } else if (!hadError && !fullContent) {
             msgEl.textContent = '(No response. The model may not accept images; use a multimodal model such as Claude or GPT-4o.)';
         }
     }
@@ -415,32 +414,74 @@ async function showLLMConfigModal() {
         console.warn('Failed to load LLM config:', e);
     }
 
+    function applyKeyPlaceholder() {
+        const src = llmConfigCache ? llmConfigCache.api_key_source : '';
+        if (src === 'config') {
+            apiKeyInput.placeholder = 'API key saved on server (leave blank to keep)';
+        } else if (src === 'env') {
+            apiKeyInput.placeholder = 'Using environment API key (leave blank to keep)';
+        } else {
+            apiKeyInput.placeholder = 'API key (stored on the server only)';
+        }
+    }
+
     // Fill the form
     if (llmConfigCache) {
         providerSel.value = llmConfigCache.provider || 'local';
         modelInput.value = llmConfigCache.model || '';
-        localUrlInput.value = llmConfigCache.local_url || 'http://localhost:11434/v1';
+        localUrlInput.value = (providerSel.value === 'openai')
+            ? (llmConfigCache.base_url || llmConfigCache.env_base_url || '')
+            : (llmConfigCache.local_url || llmConfigCache.env_base_url || 'http://localhost:11434/v1');
         systemPromptTa.value = llmConfigCache.system_prompt || '';
         apiKeyInput.value = '';  // left empty (the masked value cannot be reused)
+        applyKeyPlaceholder();
     }
 
     // React to provider changes
-    function updateProviderUI() {
+    function updateProviderUI(fromUserChange) {
         const prov = providerSel.value;
-        localUrlRow.style.display = (prov === 'local') ? 'flex' : 'none';
-        if (llmConfigCache && llmConfigCache.provider !== prov) {
-            // Use the default model when the provider changes
+        localUrlRow.style.display = (prov === 'anthropic') ? 'none' : 'flex';
+        const envUrl = (llmConfigCache && llmConfigCache.env_base_url) || '';
+        if (prov === 'openai') {
+            localUrlInput.placeholder = envUrl || 'https://api.openai.com/v1 (optional)';
+        } else if (prov === 'local') {
+            localUrlInput.placeholder = envUrl || 'http://localhost:11434/v1';
+        }
+        if (fromUserChange) {
             const defaults = {
                 'anthropic': 'claude-sonnet-4-20250514',
                 'openai': 'gpt-4o',
                 'local': 'qwen2.5:7b',
             };
-            modelInput.value = defaults[prov] || '';
+            if (llmConfigCache && llmConfigCache.provider === prov) {
+                modelInput.value = llmConfigCache.model || defaults[prov] || '';
+                localUrlInput.value = (prov === 'openai')
+                    ? (llmConfigCache.base_url || envUrl || '')
+                    : (llmConfigCache.local_url || envUrl || 'http://localhost:11434/v1');
+            } else {
+                modelInput.value = defaults[prov] || '';
+                localUrlInput.value = (prov === 'openai')
+                    ? (llmConfigCache?.base_url || envUrl || '')
+                    : (llmConfigCache?.local_url || envUrl || 'http://localhost:11434/v1');
+            }
         }
         statusEl.style.display = 'none';
     }
-    providerSel.onchange = updateProviderUI;
-    updateProviderUI();
+    providerSel.onchange = () => updateProviderUI(true);
+    updateProviderUI(false);
+
+    function collectFormConfig() {
+        const prov = providerSel.value;
+        const urlVal = localUrlInput.value.trim();
+        return {
+            provider: prov,
+            api_key: apiKeyInput.value,
+            model: modelInput.value.trim(),
+            local_url: prov === 'local' ? urlVal : (llmConfigCache?.local_url || ''),
+            base_url: prov === 'openai' ? urlVal : (llmConfigCache?.base_url || ''),
+            system_prompt: systemPromptTa.value,
+        };
+    }
 
     statusEl.style.display = 'none';
     modal.style.display = 'flex';
@@ -455,49 +496,25 @@ async function showLLMConfigModal() {
         modal.style.display = 'none';
     };
 
-    // Test connection
+    // Test connection (tests current form inputs without overwriting saved config)
     document.getElementById('llmConfigTest').onclick = async function() {
         statusEl.style.display = 'block';
         statusEl.className = 'connection-status testing';
         statusEl.textContent = '⏳ Testing connection...';
 
         try {
-            const testResp = await fetch('/api/llm/chat', {
+            const testResp = await fetch('/api/llm/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    messages: [{ role: 'user', content: 'Hello, please reply with the word "connected".' }],
-                }),
+                body: JSON.stringify(collectFormConfig()),
             });
             if (!testResp.ok) {
-                const errText = await testResp.text();
-                throw new Error('HTTP ' + testResp.status + ': ' + errText);
+                throw new Error(await extractHttpError(testResp));
             }
-            // Read the whole streamed response
-            const reader = testResp.body.getReader();
-            const decoder = new TextDecoder();
-            let fullText = '';
-            let buffer = '';
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-                for (const line of lines) {
-                    if (line.startsWith('data: ') && !line.includes('[DONE]')) {
-                        try {
-                            const p = JSON.parse(line.slice(6));
-                            if (p.token) fullText += p.token;
-                            if (p.error) throw new Error(p.error);
-                        } catch (e) {
-                            if (e.message && !e.message.startsWith('Unexpected')) throw e;
-                        }
-                    }
-                }
-            }
+            const res = await testResp.json();
+            const reply = (res && res.reply) ? String(res.reply) : '';
             statusEl.className = 'connection-status success';
-            statusEl.textContent = '✅ Connected. Model reply: ' + (fullText.slice(0, 100) || '(empty)');
+            statusEl.textContent = '✅ Connected. Model reply: ' + (reply.slice(0, 100) || '(empty)');
         } catch (e) {
             statusEl.className = 'connection-status error';
             statusEl.textContent = '❌ Connection failed: ' + e.message;
@@ -506,22 +523,14 @@ async function showLLMConfigModal() {
 
     // Save
     document.getElementById('llmConfigSave').onclick = async function() {
-        const config = {
-            provider: providerSel.value,
-            api_key: apiKeyInput.value,
-            model: modelInput.value,
-            local_url: localUrlInput.value,
-            system_prompt: systemPromptTa.value,
-        };
         try {
             const resp = await fetch('/api/llm/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
+                body: JSON.stringify(collectFormConfig()),
             });
             if (!resp.ok) {
-                const err = await resp.json();
-                throw new Error(err.detail || 'Save failed');
+                throw new Error(await extractHttpError(resp));
             }
             llmConfigCache = await resp.json();
             modal.style.display = 'none';
