@@ -17,8 +17,8 @@ DEMO_DIR = ROOT / "demo"
 MANIFEST_PATH = DEMO_DIR / "assets" / "manifest.json"
 SHIM_PATH = DEMO_DIR / "demo-shim.js"
 BUILD_SCRIPT = ROOT / "scripts" / "build_static_demo.mjs"
-MAX_DEMO_BYTES = 2_500_000
-MAX_DIST_BYTES = 4 * 1024 * 1024
+MAX_DEMO_BYTES = 6_000_000
+MAX_DIST_BYTES = 8 * 1024 * 1024
 
 
 def _load_exporter():
@@ -156,3 +156,56 @@ def test_no_cjk_in_vercel_or_demo_files():
     for path in targets:
         text = path.read_text(encoding="utf-8")
         assert not cjk_re.search(text), f"Unexpected CJK character in {path}"
+
+
+def test_stitched_crossline_and_timeslice_match_server_services():
+    import numpy as np
+
+    sys.path.insert(0, str(ROOT / "src"))
+    import lowfreq_service  # noqa: E402
+    import npy_service  # noqa: E402
+
+    exporter = _load_exporter()
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    xl_indices = (0, 20, 47)
+    ts_indices = (0, 128, 225, 255)
+
+    for vol, vol_info in manifest["volumes"].items():
+        vol_dir = ROOT / "data" / "npy" / vol
+        if not (vol_dir / "amplitude.npy").exists():
+            pytest.skip(f"data missing for {vol}")
+
+        meta = npy_service.get_metadata(str(vol_dir))
+        dt_us = int(meta.get("dt_us") or lowfreq_service.DEFAULT_DT_US)
+        n_il, n_xl, n_s = meta["n_inlines"], meta["n_crosslines"], meta["n_samples"]
+
+        for mode, mode_info in vol_info["modes"].items():
+            scale = mode_info["scale"]
+            inlines_i16 = []
+            for il in range(n_il):
+                raw_bytes = (ROOT / mode_info["slices"][str(il)]["path"]).read_bytes()
+                arr_i16 = np.frombuffer(raw_bytes, dtype="<i2").reshape(n_s, n_xl)
+                inlines_i16.append(arr_i16)
+
+            for j in xl_indices:
+                stitched_i16 = np.stack([inlines_i16[il][:, j] for il in range(n_il)], axis=1)
+                stitched_f32 = (stitched_i16.astype(np.float32) * np.float32(scale))
+                srv = npy_service.read_crossline(str(vol_dir), j)
+                if mode == "lowfreq":
+                    srv = lowfreq_service.condition_slice(srv, dt_us=dt_us, time_axis=0)
+                srv_i16 = np.frombuffer(exporter.quantize_i16_le(srv, scale), dtype="<i2").reshape(n_s, n_il)
+                srv_f32 = (srv_i16.astype(np.float32) * np.float32(scale))
+                assert np.array_equal(stitched_i16, srv_i16), f"crossline i16 mismatch {vol}/{mode} xl={j}"
+                assert np.array_equal(stitched_f32, srv_f32), f"crossline f32 mismatch {vol}/{mode} xl={j}"
+
+            for k in ts_indices:
+                stitched_i16 = np.stack([inlines_i16[il][k, :] for il in range(n_il)], axis=0)
+                stitched_f32 = (stitched_i16.astype(np.float32) * np.float32(scale))
+                if mode == "raw":
+                    srv = npy_service.read_timeslice(str(vol_dir), k)
+                else:
+                    srv = lowfreq_service.lowfreq_timeslice(str(vol_dir / "amplitude.npy"), k, dt_us)
+                srv_i16 = np.frombuffer(exporter.quantize_i16_le(srv, scale), dtype="<i2").reshape(n_il, n_xl)
+                srv_f32 = (srv_i16.astype(np.float32) * np.float32(scale))
+                assert np.array_equal(stitched_i16, srv_i16), f"timeslice i16 mismatch {vol}/{mode} ts={k}"
+                assert np.array_equal(stitched_f32, srv_f32), f"timeslice f32 mismatch {vol}/{mode} ts={k}"

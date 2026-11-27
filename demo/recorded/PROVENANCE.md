@@ -2,6 +2,8 @@
 
 Generated from the live local FastAPI + SAM3 server using the exact click rule in `scripts/test_refine_e2e.py` (`write_mask: false`).
 
+Note: This is a separate recorded run (`clean` round 1 QC score `0.558`, `noisy` round 1 QC score `0.205`); SAM3 outputs may differ slightly in trailing decimal digits between separate runs. The exact normalized `[nx, ny]` click coordinates used in each request body are recorded below.
+
 - **Date**: 2026-11-27
 - **Git commit SHA**: `fcd4e8e6b380504f3d1ac4adc3551c3b7b9fbb80`
 - **Device / GPU**: `NVIDIA GeForce RTX 4090 D` (`sam_device=cuda`)
@@ -9,6 +11,7 @@ Generated from the live local FastAPI + SAM3 server using the exact click rule i
 ## Runs
 
 ### refine_clean_il24.json (synthetic_deep_v1_clean, IL 24, index 23)
+- **Click coordinates (normalized `[nx, ny]`)**: `[0.3020833333333333, 0.880859375]` (`label=1`)
 - **Request body**: `{"direction":"inline","index":23,"mode":"raw","target_type":"deep_target","points":[[0.3020833333333333,0.880859375]],"labels":[1],"write_mask":false}`
 - **run_id**: `1`
 - **stop_reason**: `max_rounds`
@@ -17,6 +20,7 @@ Generated from the live local FastAPI + SAM3 server using the exact click rule i
 - **SHA-256**: `aee8777b7ab299a13f34bf41a5611a8fafd44ffe131549cd5768d3f7a61de3fb`
 
 ### refine_noisy_il21.json (synthetic_deep_v1, IL 21, index 20)
+- **Click coordinates (normalized `[nx, ny]`)**: `[0.3020833333333333, 0.884765625]` (`label=1`)
 - **Request body**: `{"direction":"inline","index":20,"mode":"raw","target_type":"deep_target","points":[[0.3020833333333333,0.884765625]],"labels":[1],"write_mask":false}`
 - **run_id**: `2`
 - **stop_reason**: `qc_unreliable`

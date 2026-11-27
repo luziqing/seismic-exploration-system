@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
-const MAX_DIST_BYTES = 4 * 1024 * 1024;
+const MAX_DIST_BYTES = 8 * 1024 * 1024;
 const SHIM_TAG = '<script src="/demo/demo-shim.js"></script>';
 
 function copyRecursive(src, dst) {

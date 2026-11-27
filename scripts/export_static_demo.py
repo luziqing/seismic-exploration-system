@@ -27,11 +27,11 @@ import npy_service  # noqa: E402
 from propagation_service import mask_to_points  # noqa: E402
 
 VOLUMES = ("synthetic_deep_v1", "synthetic_deep_v1_clean")
-EXPORT_INDICES = list(range(11, 30))  # inline indices 11..29 (IL 12..30)
+EXPORT_INDICES = list(range(0, 48))  # all 48 inline indices (IL 1..48)
 MODES = ("raw", "lowfreq")
 SEED = 20261108
-MAX_DEMO_BYTES = int(2.5 * 1024 * 1024)  # 2.5 MiB hard ceiling (<= 2.5 MB)
-MAX_DEMO_DECIMAL_BYTES = 2_500_000       # 2.5 MB decimal ceiling for strict safety
+MAX_DEMO_BYTES = 6 * 1024 * 1024         # 6 MiB ceiling
+MAX_DEMO_DECIMAL_BYTES = 6_000_000       # 6 MB decimal ceiling (<= 6 MB)
 
 DEMO_DIR = ROOT / "demo"
 ASSETS_DIR = DEMO_DIR / "assets"
@@ -276,7 +276,7 @@ def check_demo_size() -> int:
     total = sum(p.stat().st_size for p in DEMO_DIR.rglob("*") if p.is_file())
     print(f"Total demo/ size: {total:,} bytes ({total / (1024 * 1024):.3f} MiB)")
     if total > MAX_DEMO_DECIMAL_BYTES:
-        raise RuntimeError(f"demo/ size {total} exceeds 2.5 MB limit ({MAX_DEMO_DECIMAL_BYTES} bytes)")
+        raise RuntimeError(f"demo/ size {total} exceeds 6 MB limit ({MAX_DEMO_DECIMAL_BYTES} bytes)")
     return total
 
 

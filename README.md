@@ -39,8 +39,8 @@ IoU is measured against the generator's ground-truth mask, which the loop never 
 
 A static web preview (zero serverless backend) lets you inspect the synthetic demo without installing Python or downloading SAM3 weights:
 
-- **Works in the browser:** Browse inlines 12–30 of both synthetic volumes (`synthetic_deep_v1` noisy and `synthetic_deep_v1_clean`), toggle **Raw** / **Low-freq**, use **Compare** (**Raw | Low-freq** and **Noisy | Clean**), press **Noisy ⇄ Clean**, adjust gain/zoom, view the **Survey map**, and replay two locally recorded SAM3 + QC refine runs (**Replay recorded SAM3 run** on clean IL 24 with 3 rounds; **Replay noisy gate** on noisy IL 21).
-- **Not computed on the web:** Live SAM3 segmentation, the Auto-refine QC loop, cross-slice propagation, SEG-Y/Zarr/VDS uploads, and the AI assistant require a local server and return an explicit message (`503`) in the static preview. Inlines outside 12–30, crosslines, and time slices return `404` (`Not in the static web demo (inlines 12–30 only).`).
+- **Works in the browser:** Browse all 48 inlines, all crosslines, and all time slices of both synthetic volumes (`synthetic_deep_v1` noisy and `synthetic_deep_v1_clean`), toggle **Raw** / **Low-freq**, use **Compare** (**Raw | Low-freq** and **Noisy | Clean**), press **Noisy ⇄ Clean**, adjust gain/zoom, view the **Survey map**, and replay two locally recorded SAM3 + QC refine runs (**Replay recorded SAM3 run** on clean IL 24 with 3 rounds; **Replay noisy gate** on noisy IL 21).
+- **Not computed on the web:** Live SAM3 segmentation, the Auto-refine QC loop, cross-slice propagation, SEG-Y/Zarr/VDS uploads, and the AI assistant require a local server and return an explicit message (`503`) in the static preview. Out-of-range slice indices return `404`.
 - **Full app:** Follow [Run it](#run-it) below on a local machine.
 
 ## Run it

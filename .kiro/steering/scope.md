@@ -71,7 +71,7 @@ Because the rules say judges "may choose to judge based solely on the text descr
 
 ### 3.3 Out of scope until after 12-04
 
-- Full hosted GPU inference instance, CPU latency work, authentication, multi-user (a zero-serverless static web demo previewing synthetic inlines 12–30 and recorded local runs was approved on 2026-11-27; see D3).
+- Full hosted GPU inference instance, CPU latency work, authentication, multi-user (a zero-serverless static web demo previewing all 48 synthetic inlines, client-assembled crosslines and time slices, and recorded local runs was approved on 2026-11-27; see D3).
 - Horizon closure error (MVP Requirement 4.1 narrowed; see D2).
 - Propagation extensions (negative or box prompts, write locks, low-freq propagation).
 - Mask management UI, 3-D rendering or a separate 3-D window, meshes (the in-view survey map, S13, is the agreed substitute).
@@ -135,7 +135,7 @@ Rule from `docs/PROJECT_PLAN.md`: if any criterion looks below 7/10, fix that cr
 |---|---|---|
 | D1 | Reuse of SGSeg (begun June 2026) | **Resolved 11-12.** Rules allow pre-existing code if disclosed, and the work described must be built in the period. Owner confirms SGSeg is solely theirs (part of their PhD thesis). README and Devpost text list exactly what came from SGSeg and what was built after 10-30, and describe only the new work as the project |
 | D2 | MVP Requirement 4.1 narrowed from "fault continuity + horizon closure error" to "label-free deep-target QC + fault continuity" | **Adopted 11-12** under the owner's instruction to fix the boundary. Reason: the deep target is the demo's subject and neither original metric measures it; a loop driven by ground truth would not work on real data; horizon closure needs multi-slice horizon picks that do not exist. Owner may reverse |
-| D3 | Access through a test build, plus an approved static web demo | **Updated 2026-11-27 (owner approved):** add a zero-serverless static web demo previewing synthetic inlines 12–30 and recorded local runs, with no GPU/SAM3 inference backend on Vercel; full execution remains the local test build |
+| D3 | Access through a test build, plus an approved static web demo | **Updated 2026-11-27 (owner approved):** add a zero-serverless static web demo previewing all 48 synthetic inlines (with crosslines and time slices assembled in-browser) and recorded local runs, with no GPU/SAM3 inference backend on Vercel; full execution remains the local test build |
 | D4 | Propagation in the video | **Adopted:** at most ~10 s, after V2–V5 are recorded |
 
 ## 9. Owner actions and environment facts

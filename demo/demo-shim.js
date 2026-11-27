@@ -1,17 +1,17 @@
 // demo-shim.js — Injected ONLY into the Vercel static demo build (dist/index.html).
 // Intercepts /api/ requests in window.fetch so the unmodified frontend UI runs without a Python backend,
-// serves exported synthetic inline slices (IL 12-30), returns honest 503/404 statuses for server features,
-// and provides one-click replay of locally recorded SAM3 + QC refine runs.
+// serves exported synthetic inline slices (IL 1-48) on demand, stitches crosslines and time slices
+// in the browser from cached inlines, returns honest 503/404 statuses, and replays recorded local runs.
 (function initStaticWebDemo() {
     'use strict';
 
     const realFetch = window.fetch.bind(window);
     const UNAVAILABLE_DETAIL =
         'Not available in the static web demo: SAM3, the QC loop and the server run only in the local build. See README > Run it.';
-    const OUT_OF_RANGE_DETAIL = 'Not in the static web demo (inlines 12\u201330 only).';
     const LOCAL_RUN_URL = 'https://github.com/luziqing/seismic-exploration-system#run-it';
 
     let manifestPromise = null;
+    const inlineCache = new Map();   // key: `${vol}:${mode}:${idx}` -> Promise<Float32Array>
     const recordedCache = new Map();
 
     function getManifest() {
@@ -43,6 +43,17 @@
         });
     }
 
+    function binaryResponse(f32Array, rows, cols) {
+        return new Response(f32Array.buffer, {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-Rows': String(rows),
+                'X-Cols': String(cols),
+            },
+        });
+    }
+
     function decodeI16Slice(buffer, scale, rows, cols) {
         const view = new DataView(buffer);
         const total = rows * cols;
@@ -51,6 +62,34 @@
             out[i] = view.getInt16(i * 2, true) * scale;
         }
         return out;
+    }
+
+    function getInlineArray(vol, mode, idx, volEntry) {
+        const key = `${vol}:${mode}:${idx}`;
+        if (!inlineCache.has(key)) {
+            const p = (async () => {
+                const modeEntry = volEntry.modes[mode];
+                const sliceMeta = modeEntry.slices[String(idx)];
+                if (!sliceMeta) throw new Error(`Missing static inline ${idx}`);
+                const assetResp = await realFetch('/' + sliceMeta.path.replace(/^\/+/, ''));
+                if (!assetResp.ok) throw new Error('Static slice asset missing: HTTP ' + assetResp.status);
+                const [rows, cols] = modeEntry.shape;
+                return decodeI16Slice(await assetResp.arrayBuffer(), modeEntry.scale, rows, cols);
+            })().catch(err => {
+                inlineCache.delete(key);
+                throw err;
+            });
+            inlineCache.set(key, p);
+        }
+        return inlineCache.get(key);
+    }
+
+    async function getAllInlines(vol, mode, volEntry, nIL) {
+        const tasks = [];
+        for (let il = 0; il < nIL; il++) {
+            tasks.push(getInlineArray(vol, mode, il, volEntry));
+        }
+        return Promise.all(tasks);
     }
 
     // Explicit route table covering every /api/* fetch call in src/static/js/*.js
@@ -127,26 +166,48 @@
                 const manifest = await getManifest();
                 const volEntry = manifest.volumes && manifest.volumes[vol];
                 if (!volEntry) return jsonResponse({ detail: 'NumPy volume not found: ' + vol }, 404);
-                if (dir !== 'inline') return jsonResponse({ detail: OUT_OF_RANGE_DETAIL }, 404);
                 const modeEntry = volEntry.modes && volEntry.modes[mode];
                 if (!modeEntry) return jsonResponse({ detail: 'Unknown mode: ' + mode }, 400);
-                const sliceMeta = modeEntry.slices && modeEntry.slices[String(idx)];
-                if (!sliceMeta) return jsonResponse({ detail: OUT_OF_RANGE_DETAIL }, 404);
 
-                const assetResp = await realFetch('/' + sliceMeta.path.replace(/^\/+/, ''));
-                if (!assetResp.ok) {
-                    return jsonResponse({ detail: 'Static slice asset missing: HTTP ' + assetResp.status }, 404);
+                const meta = volEntry.meta;
+                const nIL = meta.n_inlines;
+                const nXL = meta.n_crosslines;
+                const nSamples = meta.n_samples;
+
+                if (dir === 'inline') {
+                    if (idx < 0 || idx >= nIL || !(modeEntry.slices && modeEntry.slices[String(idx)])) {
+                        return jsonResponse({ detail: `Inline index ${idx} out of range [0, ${nIL - 1}] in the static web demo.` }, 404);
+                    }
+                    const f32 = await getInlineArray(vol, mode, idx, volEntry);
+                    return binaryResponse(new Float32Array(f32), nSamples, nXL);
                 }
-                const [rows, cols] = modeEntry.shape;
-                const f32 = decodeI16Slice(await assetResp.arrayBuffer(), modeEntry.scale, rows, cols);
-                return new Response(f32.buffer, {
-                    status: 200,
-                    headers: {
-                        'Content-Type': 'application/octet-stream',
-                        'X-Rows': String(rows),
-                        'X-Cols': String(cols),
-                    },
-                });
+
+                if (dir === 'crossline') {
+                    if (idx < 0 || idx >= nXL) {
+                        return jsonResponse({ detail: `Crossline index ${idx} out of range [0, ${nXL - 1}] in the static web demo.` }, 404);
+                    }
+                    const inlines = await getAllInlines(vol, mode, volEntry, nIL);
+                    const out = new Float32Array(nSamples * nIL);
+                    for (let il = 0; il < nIL; il++) {
+                        const src = inlines[il];
+                        for (let s = 0; s < nSamples; s++) {
+                            out[s * nIL + il] = src[s * nXL + idx];
+                        }
+                    }
+                    return binaryResponse(out, nSamples, nIL);
+                }
+
+                if (idx < 0 || idx >= nSamples) {
+                    return jsonResponse({ detail: `TimeSlice index ${idx} out of range [0, ${nSamples - 1}] in the static web demo.` }, 404);
+                }
+                const inlines = await getAllInlines(vol, mode, volEntry, nIL);
+                const out = new Float32Array(nIL * nXL);
+                const rowStart = idx * nXL;
+                const rowEnd = rowStart + nXL;
+                for (let il = 0; il < nIL; il++) {
+                    out.set(inlines[il].subarray(rowStart, rowEnd), il * nXL);
+                }
+                return binaryResponse(out, nIL, nXL);
             },
         },
         {
