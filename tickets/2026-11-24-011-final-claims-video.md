@@ -1,9 +1,9 @@
 # TICKET 2026-11-24-011-final-claims-video
 
-- 指派: aux-codex
-- worktree: D:\26tmp\KiroProject\sam-worktrees\sam-codex-sam-seg
-- 基线: `kiro` current HEAD; fast-forward this worktree before starting
-- 目标: Fix the final claims-audit video wording, then commit.
+- Assignee: aux-codex
+- Worktree: D:\26tmp\KiroProject\sam-worktrees\sam-codex-sam-seg
+- Base commit: `kiro` current HEAD; fast-forward this worktree before starting
+- Goal: Fix the final claims-audit video wording, then commit.
 - Input: `D:\26tmp\KiroProject\_claims-audit-final.txt`
 - Exact fixes only:
   1. VIDEO V2a overlay: change `AUC 0.44 → 0.93 (script: measure_lowfreq.py)` to `AUC 0.44 → 0.93 on the synthetic noisy volume (script: measure_lowfreq.py)`.

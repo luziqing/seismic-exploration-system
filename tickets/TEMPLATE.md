@@ -1,23 +1,23 @@
 # TICKET <YYYY-MM-DD>-<NNN>-<name>
 
-- 指派: aux-codex | aux-antigravity | aux-simple
-- worktree: ../sam-worktrees/<dir>
-- 基线 commit: <sha>
-- 目标(一句话):
-- 输入:
-- 输出:
-- 不许碰的路径: .kiro/specs/, main, (其他 agent 的目录)
-- 验收清单:
+- Assignee: aux-codex | aux-antigravity | aux-simple
+- Worktree: ../sam-worktrees/<dir>
+- Base commit: <sha>
+- Goal:
+- Inputs:
+- Outputs:
+- Paths not to touch: .kiro/specs/, main, (other agents' directories)
+- Checklist:
   - [ ] 
-  - [ ] 测试全过
-- 截止时间:
+  - [ ] All tests pass
+- Deadline:
 
-## 回单(完成时由执行者填写)
+## Report back (filled in by the executor)
 
-- 改了哪些文件:
-- 测试结果:
-- 未解决的问题:
+- Files touched:
+- Test results:
+- Not done:
 
-## 判定记录(Jev/Bivia,如有)
+## Decision log (Jev/Bivia, if any)
 
-- 问题 / 选项 / 概率 / 最后谁定的:
+- Question / Options / Probability / Decided by:

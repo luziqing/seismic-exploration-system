@@ -1,4 +1,4 @@
-"""volume_mask_service: 切片 mask -> 三维体素 mask 的回映射 (使用临时小体, 不碰 data/)"""
+"""volume_mask_service: slice mask -> 3D voxel mask back-projection (uses small temp volume, never touches data/)"""
 import sys
 from pathlib import Path
 
@@ -9,7 +9,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import volume_mask_service as vms  # noqa: E402
 
-SHAPE = (6, 8, 20)  # nIL, nXL, nSamples (故意互不相等, 以暴露轴混淆)
+SHAPE = (6, 8, 20)  # nIL, nXL, nSamples (deliberately unequal to expose axis confusion)
 
 
 @pytest.fixture()
@@ -42,7 +42,7 @@ def _upscale(m, fy, fx):
 @pytest.mark.parametrize("direction,idx", [("inline", 2), ("crossline", 3), ("timeslice", 10)])
 def test_roundtrip_upscaled_mask_lands_in_right_voxels(vol_dir, direction, idx):
     t = _truth()
-    big = _upscale(_slice_img(t, direction, idx), 7, 5)  # 模拟前端放大后的 SAM 输出
+    big = _upscale(_slice_img(t, direction, idx), 7, 5)  # simulate upscaled frontend SAM output
     r = vms.write_slice_mask(str(vol_dir), "m", direction, idx, big)
     vol = vms.read_mask_volume(str(vol_dir), "m")
     expected = np.zeros(SHAPE, dtype=bool)

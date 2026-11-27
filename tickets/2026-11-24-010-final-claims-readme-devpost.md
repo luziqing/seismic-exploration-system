@@ -1,9 +1,9 @@
 # TICKET 2026-11-24-010-final-claims-readme-devpost
 
-- 指派: aux-antigravity
-- worktree: D:\26tmp\KiroProject\sam-worktrees\sam-antigravity-ui-docs
-- 基线: `kiro` current HEAD; fast-forward this worktree before starting
-- 目标: Fix the final claims-audit README/DEVPOST findings, then commit.
+- Assignee: aux-antigravity
+- Worktree: D:\26tmp\KiroProject\sam-worktrees\sam-antigravity-ui-docs
+- Base commit: `kiro` current HEAD; fast-forward this worktree before starting
+- Goal: Fix the final claims-audit README/DEVPOST findings, then commit.
 - Input: `D:\26tmp\KiroProject\_claims-audit-final.txt`
 - Exact fixes:
   1. README: remove the unsourced phrase `developed with torch 2.6.0+cu124`; keep the fresh-machine test statement.
