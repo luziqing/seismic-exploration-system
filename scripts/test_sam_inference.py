@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""SAM3 本机 GPU 推理 + 三维体 mask 回映射冒烟测试。
+"""SAM3 local GPU inference + 3D volume mask back-projection smoke test.
 
-流程: 合成体多条 inline -> /api/embed -> /api/predict -> /api/npy/<vol>/mask (回映射并写入体素)
-      -> 读回体 mask, 与 truth/deep_target_mask.npy 在已写入的切片上比 IoU, 并输出 il/xl/时间 包围盒。
-需先启动服务器: python src/server.py
+Flow: multiple inlines from synthetic volume -> /api/embed -> /api/predict -> /api/npy/<vol>/mask (back-project and write voxels)
+      -> read back volume mask, compute IoU against truth/deep_target_mask.npy on written slices, and print il/xl/time bbox.
+Requires running server first: python src/server.py
 """
 import io
 import os
@@ -15,12 +15,12 @@ import numpy as np
 import requests
 from PIL import Image
 
-BASE = os.environ.get("SAM3_URL", "http://127.0.0.1:9339")  # 不用 localhost: Windows 上先试 IPv6 会多等约 2 s
+BASE = os.environ.get("SAM3_URL", "http://127.0.0.1:9339")  # avoid localhost: Windows tries IPv6 first and adds ~2 s delay
 ROOT = Path(__file__).resolve().parent.parent
 VOLNAME = os.environ.get("SAM3_TEST_VOLUME", "synthetic_deep_v1")
 VOL = ROOT / "data" / "npy" / VOLNAME
 MASK_NAME = "sam_e2e_test"
-SCALE = 4  # 256x48 太小, 放大后送入 SAM
+SCALE = 4  # 256x48 is too small; upscale before sending to SAM
 INLINES = [12, 16, 20, 24, 28]
 
 
@@ -74,27 +74,27 @@ def main():
         print(f"inline {il}: embed {t_emb:.1f}s predict {t_pred:.1f}s score={out['scores'][0]:.3f} "
               f"src_mask={w['src_mask_shape']} -> grid={w['grid_shape']} voxels={w['slice_voxels']}")
 
-    assert written, "没有可测试的 inline"
+    assert written, "no testable inlines"
     info = requests.get(f"{BASE}/api/npy/{VOLNAME}/mask/{MASK_NAME}/info", timeout=30).json()
-    print(f"体 mask: 体素={info['voxel_count']} 切片数={len(info['slices'])}")
-    print(f"  包围盒 index: {info['bbox_index']}")
-    print(f"  包围盒 坐标 : {info['bbox_coords']}")
-    print(f"  质心  坐标 : {info['centroid_coords']}")
+    print(f"volume mask: voxels={info['voxel_count']} slices={len(info['slices'])}")
+    print(f"  bbox index : {info['bbox_index']}")
+    print(f"  bbox coords: {info['bbox_coords']}")
+    print(f"  centroid   : {info['centroid_coords']}")
 
     vol_mask = np.load(VOL / "masks" / f"{MASK_NAME}.npy", mmap_mode="r")
     assert vol_mask.shape == amp.shape and vol_mask.dtype == np.bool_
     pred3d = np.zeros(amp.shape, dtype=bool); gt3d = np.zeros(amp.shape, dtype=bool)
     pred3d[written] = vol_mask[written]; gt3d[written] = truth[written]
     per = [iou(np.asarray(vol_mask[i]), np.asarray(truth[i])) for i in written]
-    print(f"逐切片 IoU: {[round(x, 3) for x in per]}")
-    print(f"三维 IoU (在 {len(written)} 条已推理 inline 上): {iou(pred3d, gt3d):.3f}")
+    print(f"per-slice IoU: {[round(x, 3) for x in per]}")
+    print(f"3D IoU (over {len(written)} inferred inlines): {iou(pred3d, gt3d):.3f}")
 
-    # 通过 API 读回某条 inline 的 mask 切片, 与磁盘体一致
+    # read back a single inline mask slice via API and verify it matches disk volume
     r = requests.get(f"{BASE}/api/npy/{VOLNAME}/mask/{MASK_NAME}/slice/inline/{written[0]}", timeout=30)
     back = np.frombuffer(r.content, dtype=np.float32).reshape(int(r.headers["X-Rows"]), int(r.headers["X-Cols"]))
     assert np.array_equal(back > 0.5, np.asarray(vol_mask[written[0]]).T)
     assert info["voxel_count"] > 0
-    print("OK: SAM 推理 -> 三维体 mask 回映射链路正常")
+    print("OK: SAM inference -> 3D volume mask back-projection pipeline OK")
     return 0
 
 
