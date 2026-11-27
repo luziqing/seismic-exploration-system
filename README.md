@@ -45,7 +45,7 @@ A static web preview (zero serverless backend) lets you inspect the synthetic de
 
 ## Run it
 
-The app is a local web app: a Python server plus a page in your browser. There is no hosted instance.
+The app is a local web app: a Python server plus a page in your browser. There is no hosted instance of the full app; the static web demo above does not run SAM3.
 
 **Platform:** Windows 10/11 or Linux desktop, a current desktop browser (tested with Chrome only). An NVIDIA GPU is recommended; on CPU, each new slice takes about 15 s to encode for SAM3.
 
