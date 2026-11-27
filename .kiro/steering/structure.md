@@ -28,15 +28,19 @@ SamForGeophysics/
 │   └── static/{css,js}/       # Canvas UI, SAM client, survey map, raw/low-freq + noisy/clean compare, storage, LLM chat
 ├── scripts/
 │   ├── generate_synthetic_seismic.py   # deterministic public-domain demo data
+│   ├── export_static_demo.py           # export <= 2.5 MB int16 slices + recorded runs into demo/
+│   ├── build_static_demo.mjs           # zero-dep Node build -> dist/ (injects demo-shim.js)
 │   ├── preflight.py                    # hooks-backed compliance checks
 │   ├── run.js                          # npm script runner (picks .venv python)
 │   ├── check_js.js                     # node --check on every frontend script
 │   ├── measure_lowfreq.py              # H1/H2 numbers (deep-target visibility); results in docs/MEASUREMENTS.md
 │   └── test_sam_inference.py, test_propagation_e2e.py   # GPU end-to-end checks; need a running server and weights
+├── demo/                               # static web demo assets (<= 2.5 MB derived slices + recorded runs) and fetch shim
 ├── docs/
 │   ├── DATA_PROVENANCE.md     # where demo data comes from, and its licence
 │   └── MEASUREMENTS.md        # every published number, its script and its limits
 ├── tests/
+├── vercel.json / .vercelignore         # static Vercel build config (framework: null, allowlist ignore)
 ├── requirements.txt
 ├── package.json / .env.example
 ├── LICENSE                    # MIT
@@ -49,7 +53,7 @@ SamForGeophysics/
 - JS: classic scripts (no `type="module"`) loaded in a fixed order from `index.html`; modules share `window`-level state. `camelCase`, no framework, no build step.
 - Volume names: lowercase `snake_case`; synthetic volumes prefixed `synthetic_`.
 - New backend modules are thin, single-purpose services imported by `server.py`; keep route handlers thin.
-- Generated artefacts go under `data/` and are gitignored. Only scripts and small text metadata belong in git. Volume masks live in `data/npy/<vol>/masks/`; never write next to or over `amplitude.npy`.
+- Generated artefacts go under `data/` and are gitignored. Only scripts and small text metadata belong in git. Exception: `demo/` (total <= 2.5 MB, rebuilt via `scripts/export_static_demo.py` and verified by `tests/test_static_demo.py`) stores derived `int16` inline slices (`11..29`) and locally recorded SAM3 refine JSON runs for the static web demo. Volume masks live in `data/npy/<vol>/masks/`; never write next to or over `amplitude.npy`.
 - Do NOT copy anything from `doc/` (software-copyright application material) or from `data/weights/` into the public repository.
 
 ## Adding a feature

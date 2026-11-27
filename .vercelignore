@@ -1,0 +1,11 @@
+/*
+!vercel.json
+!package.json
+!index.html
+!LICENSE
+!src
+src/*.py
+!scripts
+scripts/*
+!scripts/build_static_demo.mjs
+!demo
